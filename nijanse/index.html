@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="bs">
+<head>
+<meta charset="UTF-8">
+<title>GR Nijanse Tool — Thumbnail Downloader</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f5;color:#1a1a1a;padding:18px;max-width:1500px;margin:0 auto;line-height:1.4;font-size:14px}
+  h1{font-size:22px;color:#c8333a;margin-bottom:4px;display:flex;align-items:center;gap:10px}
+  h1 .badge{background:#c8333a;color:#fff;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:1px}
+  .sub{color:#666;font-size:12px;margin-bottom:18px}
+  .panel{background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+  .panel h2{font-size:13px;margin-bottom:10px;color:#444;text-transform:uppercase;letter-spacing:0.5px;font-weight:700}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+  .field{display:flex;flex-direction:column;gap:3px;flex:1;min-width:120px}
+  .field.tiny{flex:0 0 90px}
+  .field.wide{flex:3}
+  .field label{font-size:11px;color:#666;font-weight:600;text-transform:uppercase;letter-spacing:0.4px}
+  .field input,.field select{padding:9px 11px;border:1px solid #ccc;border-radius:6px;font-size:13px;font-family:inherit;background:#fff;width:100%}
+  .field input:focus,.field select:focus{border-color:#c8333a;outline:none}
+  button{padding:9px 16px;border:none;border-radius:6px;background:#c8333a;color:#fff;font-weight:600;cursor:pointer;font-size:13px;font-family:inherit;transition:background 0.15s;white-space:nowrap}
+  button:hover:not(:disabled){background:#a82a30}
+  button.btn-blue{background:#1a5fa8}.btn-blue:hover:not(:disabled){background:#144a86}
+  button.btn-green{background:#1a8a4a}.btn-green:hover:not(:disabled){background:#156d3b}
+  button.btn-grey{background:#888}.btn-grey:hover:not(:disabled){background:#666}
+  button.btn-orange{background:#d97706}.btn-orange:hover:not(:disabled){background:#b35e05}
+  button:disabled{opacity:0.5;cursor:not-allowed}
+  button.sm{padding:5px 10px;font-size:11px}
+  
+  .results-bar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;padding:10px 12px;background:#fafafa;border:1px solid #e0e0e0;border-radius:8px}
+  .stats{font-size:13px;color:#444}
+  .stats .num{font-weight:700;color:#c8333a}
+  .actions{display:flex;gap:6px;flex-wrap:wrap}
+  
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+  .card{background:#fff;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;transition:transform 0.1s,box-shadow 0.1s;position:relative}
+  .card:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.1)}
+  .card.error{opacity:0.5;border-color:#f5c6cb;background:#fff5f5}
+  .card.error::after{content:'✗ Slika nije pronađena';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:11px;font-weight:700;color:#c8333a;background:#fff;padding:4px 8px;border-radius:4px;box-shadow:0 2px 6px rgba(0,0,0,0.2);white-space:nowrap}
+  
+  .card .img-wrap{width:100%;aspect-ratio:1;background:#f5f5f5;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+  .card .img-wrap img{width:100%;height:100%;object-fit:contain;cursor:zoom-in}
+  
+  .card .info{padding:8px}
+  .card .num-row{display:flex;justify-content:space-between;align-items:baseline;gap:4px;margin-bottom:4px}
+  .card .colornum{font-size:13px;font-weight:700;color:#c8333a}
+  .card .imgid{font-size:9px;color:#999;font-family:monospace}
+  .card .nm-input{width:100%;padding:5px 7px;border:1px solid #ddd;border-radius:4px;font-size:12px;font-family:inherit;background:#fff}
+  .card .nm-input:focus{border-color:#c8333a;outline:none}
+  .card .nm-input.has-value{background:#f0f9f4;border-color:#1a8a4a}
+  
+  .loading{display:none;text-align:center;padding:30px;color:#888}
+  .loading.show{display:block}
+  .spinner{display:inline-block;width:20px;height:20px;border:3px solid #e0e0e0;border-top-color:#c8333a;border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  
+  .empty{text-align:center;padding:40px 20px;color:#aaa;font-size:13px}
+  .empty .ic{font-size:48px;margin-bottom:8px;opacity:0.5}
+  
+  .help{background:#fff8e7;border:1px solid #f0d062;border-radius:8px;padding:12px 14px;font-size:12px;color:#704c00;margin-bottom:14px;line-height:1.6}
+  .help b{color:#5a3a00}
+  .help code{background:rgba(112,76,0,0.1);padding:1px 6px;border-radius:3px;font-family:monospace;font-size:11px}
+  
+  .lightbox{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:none;align-items:center;justify-content:center;padding:20px;cursor:zoom-out}
+  .lightbox.show{display:flex}
+  .lightbox img{max-width:100%;max-height:100%;object-fit:contain;border-radius:4px}
+  .lightbox .close{position:absolute;top:14px;right:14px;width:42px;height:42px;background:rgba(255,255,255,0.18);color:#fff;border:none;border-radius:50%;font-size:22px;cursor:pointer}
+  
+  .progress{height:6px;background:#e0e0e0;border-radius:3px;overflow:hidden;margin-top:8px;display:none}
+  .progress.show{display:block}
+  .progress-bar{height:100%;background:#1a8a4a;width:0%;transition:width 0.2s}
+  
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,0.3)}
+  
+  .saved-list{max-height:160px;overflow-y:auto;margin-top:8px;border:1px solid #e0e0e0;border-radius:6px}
+  .saved-item{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-bottom:1px solid #f0f0f0;font-size:12px}
+  .saved-item:last-child{border-bottom:none}
+  .saved-item:hover{background:#fafafa}
+  .saved-item .nm{font-weight:600;flex:1}
+  .saved-item .meta{color:#888;font-size:11px}
+  .saved-item .acts{display:flex;gap:4px}
+</style>
+</head>
+<body>
+
+<h1 style="display:flex;align-items:center;gap:14px">
+  <img src="../gr-logo.png" alt="Golden Rose" style="height:40px;width:auto;filter:brightness(0)" />
+  <span>Nijanse Tool</span>
+  <span class="badge">v3 ⚡</span>
+</h1>
+<div class="sub">Toplu thumbnail download · auto-rename · za Shopify · <span style="color:#1a8a4a;font-weight:600">⚡ Cloudflare Worker</span></div>
+
+<div class="help">
+  <b>💡 Kako se koristi:</b>
+  <br>1. Pronađi raspon slika na <code>goldenrose.com.tr</code> (npr. <code>5118.jpg</code> do <code>5121.jpg</code>)
+  <br>2. Unesi početni ID slike (5118), početni broj nijanse (51), broj nijansi (4) i ime serije
+  <br>3. Klikni <b>"Učitaj"</b> — alat preuzima sve thumbnaile
+  <br>4. Pod svaku sliku upiši ime nijanse (Moonlit, Cosmos, Aurora...)
+  <br>5. Klikni <b>"💾 Preuzmi sve (ZIP)"</b> — fajlovi se snimaju kao <code>"Sparkle Glow 51 Moonlit.jpg"</code>
+  <br><br><b>📦 ZIP sadrži 3 odvojene foldere:</b>
+  <br>🖼️ <b>Zoom_Velika</b> — velike slike za Shopify glavni proizvod
+  <br>📸 <b>Middle_Srednja</b> — srednje slike (thumbnail)
+  <br>🎨 <b>Swatch_Atributi</b> — male slike za color varijante (atributi)
+  <br><br><b>🎁 Bonus:</b> Imena se automatski pamte za istu seriju (sledeći put se vraćaju)
+</div>
+
+<div class="panel">
+  <h2>📥 Učitavanje raspona slika</h2>
+  <div class="row">
+    <div class="field wide">
+      <label>Ime serije</label>
+      <input type="text" id="serija" placeholder="npr. Sparkle Glow Eyeshadow" />
+    </div>
+    <div class="field tiny">
+      <label>Početni ID slike</label>
+      <input type="number" id="startId" placeholder="5118" />
+    </div>
+    <div class="field tiny">
+      <label>Početni broj nijanse</label>
+      <input type="number" id="startNum" placeholder="51" />
+    </div>
+    <div class="field tiny">
+      <label>Broj nijansi</label>
+      <input type="number" id="count" placeholder="4" min="1" max="200" />
+    </div>
+    <div>
+      <button onclick="loadShades()">Učitaj</button>
+    </div>
+  </div>
+  <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+    <small style="color:#888;font-size:11px">Brzi presets:</small>
+    <button class="sm btn-grey" onclick="preset('Sparkle Glow Eyeshadow', 5118, 51, 4)">Sparkle Glow (5118, 51, 4)</button>
+    <button class="sm btn-grey" onclick="preset('Keratin Nail Color', 4170, 1, 80)">Keratin (4170, 01, 80)</button>
+  </div>
+</div>
+
+<div id="savedPanel" class="panel" style="display:none">
+  <h2>📚 Sačuvane serije (klikni za učitavanje)</h2>
+  <div class="saved-list" id="savedList"></div>
+</div>
+
+<div id="loading" class="loading">
+  <span class="spinner"></span>
+  <span id="loadingText">Učitavam slike...</span>
+  <div class="progress show"><div class="progress-bar" id="progressBar"></div></div>
+</div>
+
+<div id="resultsBar" class="results-bar" style="display:none">
+  <div class="stats">
+    <span class="num" id="statTotal">0</span> nijansi · 
+    <span style="color:#1a8a4a">✓ <span id="statOk">0</span></span> · 
+    <span style="color:#c8333a">✗ <span id="statErr">0</span></span> · 
+    <span style="color:#888">Imenovano: <span id="statNamed">0</span></span>
+  </div>
+  <div class="actions">
+    <button class="sm btn-orange" onclick="autoFillFromMemory()">🔄 Iz memorije</button>
+    <button class="sm btn-blue" onclick="copyAllUrls()">📋 Kopiraj URL-ove</button>
+    <button class="sm btn-grey" onclick="clearAll()">🗑 Očisti</button>
+    <button class="btn-green" onclick="downloadZip()">💾 Preuzmi sve (ZIP)</button>
+  </div>
+</div>
+
+<div id="formatBar" class="results-bar" style="display:none;background:#fff5f5;border-color:#fbb">
+  <div style="font-size:12px;color:#704c00">
+    <b>📦 Formati u ZIP-u:</b>
+  </div>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px">
+      <input type="checkbox" id="chkZoom" checked />
+      <span>🖼️ Zoom (velika)</span>
+      <span style="color:#888;font-size:10px">/zoom/</span>
+    </label>
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px">
+      <input type="checkbox" id="chkMiddle" checked />
+      <span>📸 Middle (srednja)</span>
+      <span style="color:#888;font-size:10px">/middle/</span>
+    </label>
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px">
+      <input type="checkbox" id="chkSwatch" checked />
+      <span>🎨 Swatch (atributi)</span>
+      <span style="color:#888;font-size:10px">/kind/</span>
+    </label>
+  </div>
+</div>
+
+<div id="grid" class="grid"></div>
+
+<div id="empty" class="empty">
+  <div class="ic">🌈</div>
+  <div>Učitaj nijanse iznad da počneš</div>
+</div>
+
+<div id="lightbox" class="lightbox" onclick="closeLightbox()">
+  <button class="close" onclick="closeLightbox()">×</button>
+  <img id="lightboxImg" src="" alt="" />
+</div>
+
+<!-- JSZip CDN -->
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+<script>
+const BASE_URL = 'https://www.goldenrose.com.tr/img/product/zoom/';
+let currentShades = []; // {imgId, colorNum, serija, name, status}
+let currentSerija = '';
+
+// LocalStorage helpers
+function loadSaved(){
+  try { return JSON.parse(localStorage.getItem('gr-nijanse-data') || '{}'); }
+  catch(e){ return {}; }
+}
+function saveData(serija, namesByImgId){
+  const data = loadSaved();
+  if(!data[serija]) data[serija] = {names:{}, lastUsed: Date.now()};
+  data[serija].names = {...data[serija].names, ...namesByImgId};
+  data[serija].lastUsed = Date.now();
+  localStorage.setItem('gr-nijanse-data', JSON.stringify(data));
+}
+function deleteSerija(serija){
+  const data = loadSaved();
+  delete data[serija];
+  localStorage.setItem('gr-nijanse-data', JSON.stringify(data));
+  renderSavedList();
+}
+
+function renderSavedList(){
+  const data = loadSaved();
+  const keys = Object.keys(data).sort((a,b)=>(data[b].lastUsed||0)-(data[a].lastUsed||0));
+  const panel = document.getElementById('savedPanel');
+  const list = document.getElementById('savedList');
+  if(keys.length === 0){
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = 'block';
+  list.innerHTML = keys.map(s => {
+    const d = data[s];
+    const cnt = Object.keys(d.names || {}).length;
+    return `<div class="saved-item">
+      <div>
+        <div class="nm">${escapeHtml(s)}</div>
+        <div class="meta">${cnt} nijansi · ${new Date(d.lastUsed).toLocaleDateString('bs-BA')}</div>
+      </div>
+      <div class="acts">
+        <button class="sm btn-grey" onclick="useSaved('${escapeAttr(s)}')">Učitaj</button>
+        <button class="sm" style="background:#c8333a" onclick="if(confirm('Obrisati ${escapeAttr(s)}?'))deleteSerija('${escapeAttr(s)}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function useSaved(serija){
+  document.getElementById('serija').value = serija;
+  toast('Serija odabrana, unesi raspon');
+  document.getElementById('startId').focus();
+}
+
+function preset(serija, startId, startNum, count){
+  document.getElementById('serija').value = serija;
+  document.getElementById('startId').value = startId;
+  document.getElementById('startNum').value = startNum;
+  document.getElementById('count').value = count;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escapeAttr(s){
+  return String(s).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+function toast(msg, dur){
+  dur = dur || 2000;
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), dur);
+}
+
+async function loadShades(){
+  const serija = document.getElementById('serija').value.trim();
+  const startId = parseInt(document.getElementById('startId').value);
+  const startNum = parseInt(document.getElementById('startNum').value);
+  const count = parseInt(document.getElementById('count').value);
+  
+  if(!serija || !startId || !startNum || !count){
+    toast('Popuni sve poljice');
+    return;
+  }
+  if(count > 200){
+    if(!confirm(`${count} slika je puno! Stvarno učitati?`)) return;
+  }
+  
+  currentSerija = serija;
+  currentShades = [];
+  
+  // Pre-fill iz localStorage
+  const saved = loadSaved();
+  const memoryNames = saved[serija]?.names || {};
+  
+  for(let i = 0; i < count; i++){
+    const imgId = startId + i;
+    const colorNum = startNum + i;
+    currentShades.push({
+      imgId,
+      colorNum,
+      serija,
+      name: memoryNames[String(imgId)] || '',
+      status: 'pending'
+    });
+  }
+  
+  // Show loading
+  document.getElementById('loading').classList.add('show');
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('resultsBar').style.display = 'none';
+  document.getElementById('grid').innerHTML = '';
+  
+  // Test image existence (HEAD requests in parallel batches)
+  const batchSize = 10;
+  let done = 0;
+  
+  for(let b = 0; b < currentShades.length; b += batchSize){
+    const batch = currentShades.slice(b, b + batchSize);
+    await Promise.all(batch.map(async (sh) => {
+      const url = BASE_URL + sh.imgId + '.jpg';
+      try {
+        // Try with Image() since fetch has CORS issues
+        await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = ()=>{ sh.status = 'ok'; resolve(); };
+          img.onerror = ()=>{ sh.status = 'error'; resolve(); };
+          img.src = url;
+          // Timeout fallback
+          setTimeout(()=>{ if(sh.status==='pending'){ sh.status='error'; resolve(); } }, 8000);
+        });
+      } catch(e){ sh.status = 'error'; }
+      done++;
+      const pct = Math.round((done/currentShades.length)*100);
+      document.getElementById('progressBar').style.width = pct + '%';
+      document.getElementById('loadingText').textContent = `Provjeram slike... (${done}/${currentShades.length})`;
+    }));
+    renderGrid();  // progressive render
+  }
+  
+  document.getElementById('loading').classList.remove('show');
+  renderGrid();
+  updateStats();
+  document.getElementById('resultsBar').style.display = 'flex';
+  document.getElementById('formatBar').style.display = 'flex';
+}
+
+function renderGrid(){
+  const grid = document.getElementById('grid');
+  grid.innerHTML = currentShades.map((sh, idx) => {
+    const url = BASE_URL + sh.imgId + '.jpg';
+    const isErr = sh.status === 'error';
+    const colorPad = String(sh.colorNum).padStart(2, '0');
+    return `<div class="card ${isErr?'error':''}">
+      <div class="img-wrap">
+        ${isErr ? '<div style="color:#aaa;font-size:11px">N/A</div>' :
+          `<img src="${url}" loading="lazy" onclick="lightbox('${url}')" alt="${colorPad}" />`
+        }
+      </div>
+      <div class="info">
+        <div class="num-row">
+          <span class="colornum">${colorPad}</span>
+          <span class="imgid">${sh.imgId}</span>
+        </div>
+        <input type="text" 
+          class="nm-input ${sh.name?'has-value':''}" 
+          placeholder="ime nijanse..." 
+          value="${escapeHtml(sh.name)}"
+          oninput="updateName(${idx}, this.value)"
+          onblur="saveCurrentNames()" />
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function updateName(idx, val){
+  if(!currentShades[idx]) return;
+  currentShades[idx].name = val.trim();
+  // visual update of the input
+  const inputs = document.querySelectorAll('.nm-input');
+  if(inputs[idx]){
+    if(currentShades[idx].name) inputs[idx].classList.add('has-value');
+    else inputs[idx].classList.remove('has-value');
+  }
+  updateStats();
+}
+
+function saveCurrentNames(){
+  if(!currentSerija) return;
+  const namesByImgId = {};
+  currentShades.forEach(sh => {
+    if(sh.name) namesByImgId[String(sh.imgId)] = sh.name;
+  });
+  if(Object.keys(namesByImgId).length > 0){
+    saveData(currentSerija, namesByImgId);
+    renderSavedList();
+  }
+}
+
+function updateStats(){
+  document.getElementById('statTotal').textContent = currentShades.length;
+  document.getElementById('statOk').textContent = currentShades.filter(s=>s.status==='ok').length;
+  document.getElementById('statErr').textContent = currentShades.filter(s=>s.status==='error').length;
+  document.getElementById('statNamed').textContent = currentShades.filter(s=>s.name).length;
+}
+
+function autoFillFromMemory(){
+  if(!currentSerija){ toast('Učitaj seriju prvo'); return; }
+  const saved = loadSaved();
+  const memoryNames = saved[currentSerija]?.names || {};
+  let filled = 0;
+  currentShades.forEach(sh => {
+    if(!sh.name && memoryNames[String(sh.imgId)]){
+      sh.name = memoryNames[String(sh.imgId)];
+      filled++;
+    }
+  });
+  renderGrid();
+  updateStats();
+  toast(filled ? `Popunjeno ${filled} nijansi iz memorije` : 'Nema sačuvanih imena za ovu seriju');
+}
+
+function clearAll(){
+  if(!confirm('Obrisati sve unose (samo ovaj prikaz, memorija ostaje)?')) return;
+  currentShades.forEach(s => s.name = '');
+  renderGrid();
+  updateStats();
+}
+
+function copyAllUrls(){
+  const urls = currentShades.filter(s=>s.status==='ok').map(s=>BASE_URL + s.imgId + '.jpg').join('\n');
+  navigator.clipboard.writeText(urls).then(()=>{
+    toast(`${currentShades.filter(s=>s.status==='ok').length} URL-ova kopirano`);
+  }).catch(()=>toast('Greška pri kopiranju'));
+}
+
+async function downloadZip(){
+  const okShades = currentShades.filter(s => s.status === 'ok');
+  if(okShades.length === 0){ toast('Nema slika za download'); return; }
+  
+  // Save names first
+  saveCurrentNames();
+  
+  // Hangi versiyonları indireceğiz?
+  const downloadZoom = document.getElementById('chkZoom')?.checked !== false;
+  const downloadMiddle = document.getElementById('chkMiddle')?.checked !== false;
+  const downloadSwatch = document.getElementById('chkSwatch')?.checked || false;
+  
+  if(!downloadZoom && !downloadMiddle && !downloadSwatch){
+    toast('Odaberi barem jedan format');
+    return;
+  }
+  
+  document.getElementById('loading').classList.add('show');
+  document.getElementById('loadingText').textContent = 'Pripremam...';
+  document.getElementById('progressBar').style.width = '0%';
+  
+  const zip = new JSZip();
+  const folderZoom = downloadZoom ? zip.folder('Zoom_Velika') : null;
+  const folderMiddle = downloadMiddle ? zip.folder('Middle_Srednja') : null;
+  const folderSwatch = downloadSwatch ? zip.folder('Swatch_Atributi') : null;
+  
+  const formatCount = Number(downloadZoom) + Number(downloadMiddle) + Number(downloadSwatch);
+  let totalTasks = okShades.length * formatCount;
+  let done = 0;
+  let failed = 0;
+  const startTime = Date.now();
+  
+  // Build all download tasks
+  const tasks = [];
+  for(const sh of okShades){
+    const colorPad = String(sh.colorNum).padStart(2, '0');
+    const baseFilename = sh.name 
+      ? `${currentSerija} ${colorPad} ${sh.name}.jpg`
+      : `${currentSerija} ${colorPad}.jpg`;
+    
+    if(downloadZoom){
+      tasks.push({
+        url: 'https://www.goldenrose.com.tr/img/product/zoom/' + sh.imgId + '.jpg',
+        folder: folderZoom,
+        filename: baseFilename,
+        format: 'Zoom'
+      });
+    }
+    if(downloadMiddle){
+      tasks.push({
+        url: 'https://www.goldenrose.com.tr/img/product/middle/' + sh.imgId + '.jpg',
+        folder: folderMiddle,
+        filename: baseFilename,
+        format: 'Middle'
+      });
+    }
+    if(downloadSwatch){
+      tasks.push({
+        urls: [
+          'https://www.goldenrose.com.tr/img/product/kind/' + sh.imgId + '.jpg',
+          'https://www.goldenrose.com.tr/img/product/kind/' + sh.imgId + '.png',
+        ],
+        folder: folderSwatch,
+        filename: baseFilename,
+        format: 'Swatch',
+        isSwatch: true
+      });
+    }
+  }
+  
+  // 🚀 KESİN ÇÖZÜM: Cloudflare Worker proxy
+  // Senin kendi proxy'n, sınırsız, hızlı, güvenilir
+  const PROXY_URL = 'https://gr-proxy.tugay-goldenrose.workers.dev/?url=';
+  
+  // Canvas-based fallback (eğer proxy down olursa)
+  async function fetchViaCanvas(url, timeoutMs){
+    timeoutMs = timeoutMs || 8000;
+    return new Promise((resolve)=>{
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      let resolved = false;
+      const finish = (val)=>{ if(!resolved){ resolved=true; resolve(val); } };
+      img.onload = ()=>{
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || 500;
+          canvas.height = img.naturalHeight || 500;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          canvas.toBlob((blob)=>{
+            if(blob && blob.size > 100) finish(blob);
+            else finish(null);
+          }, 'image/jpeg', 0.95);
+        } catch(e) { finish(null); }
+      };
+      img.onerror = ()=>finish(null);
+      img.src = url;
+      setTimeout(()=>finish(null), timeoutMs);
+    });
+  }
+  
+  async function fetchSingle(url, timeoutMs){
+    timeoutMs = timeoutMs || 10000;
+    
+    // PRIMARY: Cloudflare Worker proxy (najbrži i najpouzdaniji)
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(()=>ctrl.abort(), timeoutMs);
+      const response = await fetch(PROXY_URL + encodeURIComponent(url), { 
+        signal: ctrl.signal 
+      });
+      clearTimeout(tid);
+      if(response.ok){
+        const blob = await response.blob();
+        if(blob.size > 100 && blob.type.startsWith('image/')) return blob;
+      }
+    } catch(e){
+      console.warn('Worker proxy failed for', url, e.message);
+    }
+    
+    // FALLBACK: Canvas (ako worker ne radi)
+    return await fetchViaCanvas(url, 5000);
+  }
+  
+  async function processTask(task){
+    let blob = null;
+    if(task.isSwatch){
+      // Try multiple swatch URL patterns
+      for(const u of task.urls){
+        blob = await fetchSingle(u, 4000);
+        if(blob) break;
+      }
+    } else {
+      blob = await fetchSingle(task.url, 6000);
+    }
+    if(blob){
+      task.folder.file(task.filename, blob);
+    } else {
+      failed++;
+    }
+    done++;
+    const pct = Math.round((done/totalTasks)*100);
+    const elapsed = Math.round((Date.now()-startTime)/1000);
+    document.getElementById('progressBar').style.width = pct + '%';
+    document.getElementById('loadingText').textContent = 
+      `${task.format}: ${done}/${totalTasks} (${pct}%) · ${elapsed}s · ${failed} grešaka`;
+  }
+  
+  // CRITICAL: Process tasks in PARALLEL batches of 10 (Worker handles high concurrency)
+  const PARALLEL = 10;
+  for(let i = 0; i < tasks.length; i += PARALLEL){
+    const batch = tasks.slice(i, i + PARALLEL);
+    await Promise.all(batch.map(processTask));
+  }
+  
+  document.getElementById('loadingText').textContent = 'Generiram ZIP fajl...';
+  
+  const blob = await zip.generateAsync({type:'blob'}, (meta)=>{
+    document.getElementById('progressBar').style.width = meta.percent + '%';
+  });
+  
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${currentSerija.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.zip`;
+  a.click();
+  
+  const totalSec = Math.round((Date.now()-startTime)/1000);
+  document.getElementById('loading').classList.remove('show');
+  toast(`✓ ZIP preuzet za ${totalSec}s · ${done-failed}/${totalTasks} uspješno`, 4000);
+}
+
+// Lightbox
+function lightbox(url){
+  document.getElementById('lightboxImg').src = url;
+  document.getElementById('lightbox').classList.add('show');
+}
+function closeLightbox(){
+  document.getElementById('lightbox').classList.remove('show');
+}
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape') closeLightbox();
+});
+
+// Init
+renderSavedList();
+</script>
+
+</body>
+</html>
