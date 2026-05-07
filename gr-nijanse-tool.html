@@ -97,6 +97,10 @@
   <br>3. Klikni <b>"Učitaj"</b> — alat preuzima sve thumbnaile
   <br>4. Pod svaku sliku upiši ime nijanse (Moonlit, Cosmos, Aurora...)
   <br>5. Klikni <b>"💾 Preuzmi sve (ZIP)"</b> — fajlovi se snimaju kao <code>"Sparkle Glow 51 Moonlit.jpg"</code>
+  <br><br><b>📦 ZIP sadrži 3 odvojene foldere:</b>
+  <br>🖼️ <b>Zoom_Velika</b> — velike slike za Shopify glavni proizvod
+  <br>📸 <b>Middle_Srednja</b> — srednje slike (thumbnail)
+  <br>🎨 <b>Swatch_Atributi</b> — male slike za color varijante (atributi)
   <br><br><b>🎁 Bonus:</b> Imena se automatski pamte za istu seriju (sledeći put se vraćaju)
 </div>
 
@@ -171,10 +175,10 @@
       <span>📸 Middle (srednja)</span>
       <span style="color:#888;font-size:10px">/middle/</span>
     </label>
-    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;opacity:0.6">
-      <input type="checkbox" id="chkSwatch" />
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px">
+      <input type="checkbox" id="chkSwatch" checked />
       <span>🎨 Swatch (atributi)</span>
-      <span style="color:#888;font-size:10px">probni</span>
+      <span style="color:#888;font-size:10px">/kind/</span>
     </label>
   </div>
 </div>
@@ -493,12 +497,11 @@ async function downloadZip(){
     if(downloadSwatch){
       tasks.push({
         urls: [
-          'https://www.goldenrose.com.tr/img/product/spot/' + sh.imgId + '.jpg',
-          'https://www.goldenrose.com.tr/img/product/spot/' + sh.imgId + '.png',
-          'https://www.goldenrose.com.tr/img/product/swatch/' + sh.imgId + '.jpg',
+          'https://www.goldenrose.com.tr/img/product/kind/' + sh.imgId + '.jpg',
+          'https://www.goldenrose.com.tr/img/product/kind/' + sh.imgId + '.png',
         ],
         folder: folderSwatch,
-        filename: baseFilename.replace('.jpg', '.png'),
+        filename: baseFilename,
         format: 'Swatch',
         isSwatch: true
       });
