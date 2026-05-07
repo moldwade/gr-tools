@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="bs">
+<head>
+<meta charset="UTF-8">
+<title>Golden Rose · Tools</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Golden Rose — Internal Tools Hub">
+<link rel="icon" type="image/png" href="gr-logo.png">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  
+  html,body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+    background:#000;
+    color:#fff;
+    min-height:100vh;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  
+  /* Subtle background grain */
+  body::before{
+    content:'';
+    position:fixed;
+    inset:0;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%, rgba(200,51,58,0.08), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 100%, rgba(255,215,0,0.04), transparent 60%);
+    pointer-events:none;
+    z-index:0;
+  }
+  
+  .container{
+    max-width:1240px;
+    margin:0 auto;
+    padding:50px 24px;
+    position:relative;
+    z-index:1;
+  }
+  
+  /* Header */
+  header{
+    text-align:center;
+    margin-bottom:60px;
+    padding-top:40px;
+  }
+  
+  .logo-wrap{
+    display:inline-block;
+    margin-bottom:24px;
+    position:relative;
+  }
+  .logo-wrap img{
+    height:140px;
+    width:auto;
+    filter:drop-shadow(0 0 30px rgba(255,255,255,0.06));
+    transition:transform 0.6s cubic-bezier(0.4,0,0.2,1);
+  }
+  .logo-wrap:hover img{
+    transform:scale(1.03);
+  }
+  
+  .divider{
+    width:60px;
+    height:1px;
+    background:linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    margin:20px auto;
+  }
+  
+  h1{
+    font-size:14px;
+    font-weight:500;
+    color:#888;
+    margin-bottom:12px;
+    letter-spacing:6px;
+    text-transform:uppercase;
+  }
+  
+  .tagline{
+    color:#666;
+    font-size:13px;
+    max-width:480px;
+    margin:0 auto;
+    line-height:1.7;
+    font-weight:300;
+  }
+  
+  /* Section heading */
+  .section{
+    margin-top:50px;
+  }
+  .section-title{
+    font-size:11px;
+    color:#555;
+    letter-spacing:3px;
+    text-transform:uppercase;
+    margin-bottom:24px;
+    font-weight:600;
+    display:flex;
+    align-items:center;
+    gap:14px;
+  }
+  .section-title::after{
+    content:'';
+    flex:1;
+    height:1px;
+    background:linear-gradient(90deg, rgba(255,255,255,0.1), transparent);
+  }
+  
+  /* Tools grid */
+  .tools-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(290px, 1fr));
+    gap:18px;
+  }
+  
+  .tool-card{
+    background:rgba(255,255,255,0.025);
+    border:1px solid rgba(255,255,255,0.06);
+    border-radius:16px;
+    padding:26px;
+    text-decoration:none;
+    color:#fff;
+    transition:all 0.35s cubic-bezier(0.4,0,0.2,1);
+    display:block;
+    position:relative;
+    overflow:hidden;
+    backdrop-filter:blur(10px);
+  }
+  
+  .tool-card::before{
+    content:'';
+    position:absolute;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:linear-gradient(135deg, rgba(200,51,58,0.08), rgba(255,215,0,0.05));
+    opacity:0;
+    transition:opacity 0.35s ease;
+    pointer-events:none;
+  }
+  
+  .tool-card::after{
+    content:'';
+    position:absolute;
+    top:0;
+    left:0;
+    right:0;
+    height:1px;
+    background:linear-gradient(90deg, transparent, rgba(255,215,0,0.6), rgba(200,51,58,0.6), transparent);
+    transform:scaleX(0);
+    transform-origin:center;
+    transition:transform 0.4s ease;
+  }
+  
+  .tool-card:hover{
+    transform:translateY(-5px);
+    background:rgba(255,255,255,0.04);
+    border-color:rgba(255,215,0,0.25);
+    box-shadow:0 20px 50px rgba(0,0,0,0.5), 0 0 30px rgba(200,51,58,0.1);
+  }
+  .tool-card:hover::before{ opacity:1; }
+  .tool-card:hover::after{ transform:scaleX(1); }
+  
+  .tool-card.disabled{
+    opacity:0.35;
+    cursor:not-allowed;
+    pointer-events:none;
+  }
+  
+  .tool-icon{
+    font-size:34px;
+    margin-bottom:16px;
+    display:block;
+    line-height:1;
+  }
+  
+  .tool-title{
+    font-size:16px;
+    font-weight:600;
+    margin-bottom:8px;
+    letter-spacing:0.3px;
+    color:#fff;
+  }
+  
+  .tool-desc{
+    font-size:12.5px;
+    color:#888;
+    line-height:1.65;
+    margin-bottom:16px;
+    min-height:50px;
+    font-weight:300;
+  }
+  
+  .tool-meta{
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+  }
+  
+  .tag{
+    font-size:9.5px;
+    padding:3px 9px;
+    border-radius:20px;
+    font-weight:600;
+    letter-spacing:0.6px;
+    text-transform:uppercase;
+    background:rgba(255,255,255,0.06);
+    border:1px solid rgba(255,255,255,0.08);
+    color:#aaa;
+  }
+  .tag.production{
+    background:rgba(34,197,94,0.12);
+    color:#4ade80;
+    border-color:rgba(34,197,94,0.2);
+  }
+  .tag.new{
+    background:linear-gradient(135deg, rgba(200,51,58,0.18), rgba(255,215,0,0.18));
+    color:#ffd700;
+    border-color:rgba(255,215,0,0.25);
+  }
+  .tag.beta{
+    background:rgba(255,165,0,0.12);
+    color:#fbbf24;
+    border-color:rgba(255,165,0,0.2);
+  }
+  .tag.soon{
+    background:rgba(150,150,150,0.08);
+    color:#666;
+  }
+  .tag.shopify{
+    background:rgba(150,200,80,0.12);
+    color:#a3d977;
+    border-color:rgba(150,200,80,0.2);
+  }
+  
+  /* Footer */
+  footer{
+    text-align:center;
+    padding:50px 0 30px;
+    margin-top:60px;
+    border-top:1px solid rgba(255,255,255,0.05);
+    color:#444;
+    font-size:11px;
+  }
+  footer a{
+    color:#777;
+    text-decoration:none;
+    transition:color 0.2s ease;
+    margin:0 8px;
+  }
+  footer a:hover{
+    color:#ffd700;
+  }
+  .footer-row{
+    margin-bottom:8px;
+    letter-spacing:0.3px;
+  }
+  .footer-tech{
+    color:#333;
+    font-size:10px;
+    letter-spacing:1px;
+    text-transform:uppercase;
+  }
+  
+  /* Animations */
+  @keyframes fadeIn{
+    from{opacity:0;transform:translateY(15px)}
+    to{opacity:1;transform:translateY(0)}
+  }
+  
+  header{
+    animation:fadeIn 0.8s ease backwards;
+  }
+  
+  .tool-card{
+    animation:fadeIn 0.6s ease backwards;
+  }
+  .tool-card:nth-child(1){animation-delay:0.1s}
+  .tool-card:nth-child(2){animation-delay:0.18s}
+  .tool-card:nth-child(3){animation-delay:0.26s}
+  .tool-card:nth-child(4){animation-delay:0.34s}
+  .tool-card:nth-child(5){animation-delay:0.42s}
+  .tool-card:nth-child(6){animation-delay:0.5s}
+  
+  .section{
+    animation:fadeIn 0.8s ease backwards;
+    animation-delay:0.3s;
+  }
+  
+  /* Mobile */
+  @media (max-width:600px){
+    .container{padding:30px 18px}
+    .logo-wrap img{height:100px}
+    h1{font-size:11px;letter-spacing:4px}
+    .tagline{font-size:12px}
+    header{margin-bottom:40px;padding-top:20px}
+    .tools-grid{gap:14px}
+    .tool-card{padding:22px}
+  }
+  
+  /* Custom scrollbar */
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-track{background:#000}
+  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:4px}
+  ::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.15)}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <header>
+    <div class="logo-wrap">
+      <img src="gr-logo.png" alt="Golden Rose" />
+    </div>
+    <div class="divider"></div>
+    <h1>Internal Tools Hub</h1>
+    <p class="tagline">Profesionalni alati za Golden Rose tim — automatizacija, brže, pametnije.</p>
+  </header>
+
+  <div class="section">
+    <div class="section-title">⚡ Aktivni alati</div>
+    <div class="tools-grid">
+      
+      <a href="/nijanse/" class="tool-card">
+        <span class="tool-icon">🌈</span>
+        <div class="tool-title">Nijanse Tool</div>
+        <div class="tool-desc">Toplu thumbnail download iz goldenrose.com.tr za Shopify color varijante. Auto-rename + ZIP.</div>
+        <div class="tool-meta">
+          <span class="tag new">v3 ⚡</span>
+          <span class="tag shopify">Shopify</span>
+        </div>
+      </a>
+
+      <a href="https://b2b.goldenrose.ba" target="_blank" class="tool-card">
+        <span class="tool-icon">🏢</span>
+        <div class="tool-title">B2B Sistem ↗</div>
+        <div class="tool-desc">Glavna aplikacija — narudžbe, KO, dugovanja, kupci, proizvodi za komercijaliste i admine.</div>
+        <div class="tool-meta">
+          <span class="tag production">Production</span>
+        </div>
+      </a>
+
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">🚧 U razvoju / Planirano</div>
+    <div class="tools-grid">
+
+      <a href="#" class="tool-card disabled">
+        <span class="tool-icon">📑</span>
+        <div class="tool-title">Dugovanja PDF→CSV</div>
+        <div class="tool-desc">Konverzija PDF izvoda u CSV za upload u B2B sistem (Raiffeisen, Addiko).</div>
+        <div class="tool-meta">
+          <span class="tag soon">Uskoro</span>
+        </div>
+      </a>
+
+      <a href="#" class="tool-card disabled">
+        <span class="tool-icon">💰</span>
+        <div class="tool-title">Cjenovnik Generator</div>
+        <div class="tool-desc">Generiše PDF cjenovnik iz Firebase baze sa custom popustom po kupcu.</div>
+        <div class="tool-meta">
+          <span class="tag soon">Planirano</span>
+        </div>
+      </a>
+
+      <a href="#" class="tool-card disabled">
+        <span class="tool-icon">📊</span>
+        <div class="tool-title">Sales Dashboard</div>
+        <div class="tool-desc">Real-time prikaz prodaje, top kupci, top proizvodi, performansa komercijalista.</div>
+        <div class="tool-meta">
+          <span class="tag soon">Planirano</span>
+        </div>
+      </a>
+
+      <a href="#" class="tool-card disabled">
+        <span class="tool-icon">📦</span>
+        <div class="tool-title">Stock Sync</div>
+        <div class="tool-desc">Sinhronizacija stanja zaliha između Shopify i Firebase B2B sistema.</div>
+        <div class="tool-meta">
+          <span class="tag soon">Idea</span>
+        </div>
+      </a>
+
+    </div>
+  </div>
+
+  <footer>
+    <div class="footer-row">
+      <a href="https://b2b.goldenrose.ba">B2B Sistem</a> ·
+      <a href="https://www.goldenrose.ba">Webshop</a> ·
+      <a href="mailto:tugay@goldenrose.ba">Kontakt</a>
+    </div>
+    <div class="footer-row footer-tech">© 2026 Golden Rose · ⚡ Powered by Cloudflare Workers</div>
+  </footer>
+
+</div>
+
+</body>
+</html>
