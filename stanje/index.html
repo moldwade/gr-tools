@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="bs">
+<head>
+<meta charset="UTF-8">
+<title>Stanje Robe PDF→CSV · Golden Rose</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="../gr-logo.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+    background:#000;color:#fff;min-height:100vh;line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  body::before{
+    content:'';position:fixed;inset:0;
+    background:radial-gradient(ellipse 80% 50% at 50% 0%, rgba(34,197,94,0.06), transparent 60%);
+    pointer-events:none;z-index:0;
+  }
+  
+  .container{max-width:1300px;margin:0 auto;padding:30px 20px;position:relative;z-index:1}
+  
+  /* Header */
+  header{
+    display:flex;align-items:center;gap:14px;margin-bottom:30px;
+    padding-bottom:20px;border-bottom:1px solid rgba(255,255,255,0.08);
+  }
+  header img{height:44px;width:auto}
+  .header-text{flex:1}
+  .header-text h1{font-size:18px;font-weight:600;margin-bottom:3px}
+  .header-text .sub{font-size:12px;color:#888}
+  .back-link{
+    color:#999;text-decoration:none;font-size:12px;
+    padding:6px 12px;border:1px solid rgba(255,255,255,0.15);
+    border-radius:8px;transition:all 0.2s;
+  }
+  .back-link:hover{background:rgba(255,255,255,0.05);color:#ffd700;border-color:rgba(255,215,0,0.3)}
+  
+  /* Drop zone */
+  .dropzone{
+    border:2px dashed rgba(255,255,255,0.2);border-radius:16px;
+    padding:60px 30px;text-align:center;cursor:pointer;
+    transition:all 0.3s;background:rgba(255,255,255,0.02);
+    margin-bottom:24px;
+  }
+  .dropzone:hover{border-color:rgba(34,197,94,0.4);background:rgba(34,197,94,0.03)}
+  .dropzone.drag{border-color:#4ade80;background:rgba(34,197,94,0.06);transform:scale(1.005)}
+  .dropzone.has-file{border-style:solid;border-color:rgba(34,197,94,0.4);background:rgba(34,197,94,0.04)}
+  .dropzone .icon{font-size:50px;margin-bottom:14px;display:block;opacity:0.7}
+  .dropzone .text{font-size:15px;color:#ddd;margin-bottom:6px;font-weight:500}
+  .dropzone .sub{font-size:12px;color:#888}
+  .dropzone input{display:none}
+  
+  /* Status */
+  .status{
+    padding:14px 18px;border-radius:10px;margin-bottom:20px;
+    font-size:13px;display:none;
+  }
+  .status.show{display:block;animation:fadeIn 0.3s}
+  .status.info{background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#93c5fd}
+  .status.success{background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#86efac}
+  .status.error{background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#fca5a5}
+  .status.warn{background:rgba(255,165,0,0.12);border:1px solid rgba(255,165,0,0.3);color:#fcd34d}
+  
+  /* Actions */
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+  .btn{
+    padding:11px 20px;border:none;border-radius:10px;cursor:pointer;
+    font-size:13px;font-weight:600;transition:all 0.2s;
+    display:inline-flex;align-items:center;gap:8px;
+    font-family:inherit;
+  }
+  .btn-primary{background:linear-gradient(135deg,#16a34a,#15803d);color:#fff}
+  .btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(34,197,94,0.4)}
+  .btn-secondary{background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)}
+  .btn-secondary:hover{background:rgba(255,255,255,0.1)}
+  .btn:disabled{opacity:0.4;cursor:not-allowed}
+  
+  /* Stats */
+  .stats{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+    gap:12px;margin-bottom:20px;
+  }
+  .stat{
+    background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+    border-radius:10px;padding:14px;
+  }
+  .stat-label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+  .stat-value{font-size:20px;font-weight:700;color:#fff}
+  .stat-value.gold{color:#ffd700}
+  .stat-value.green{color:#4ade80}
+  .stat-value.red{color:#fca5a5}
+  
+  /* Table */
+  .table-wrap{
+    background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);
+    border-radius:14px;overflow:hidden;margin-bottom:20px;
+  }
+  .table-header{
+    padding:14px 18px;background:rgba(255,255,255,0.04);
+    border-bottom:1px solid rgba(255,255,255,0.08);
+    display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;
+  }
+  .table-header strong{font-size:13px}
+  .filter-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .search,.filter-select{
+    background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);
+    color:#fff;padding:7px 10px;border-radius:8px;font-size:12px;
+    font-family:inherit;
+  }
+  .search{width:200px}
+  .filter-select{cursor:pointer}
+  .search:focus,.filter-select:focus{outline:none;border-color:rgba(34,197,94,0.5)}
+  .table-scroll{max-height:600px;overflow:auto}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{
+    background:rgba(255,255,255,0.04);padding:11px 12px;text-align:left;
+    font-weight:600;color:#bbb;font-size:11px;text-transform:uppercase;
+    letter-spacing:0.4px;position:sticky;top:0;z-index:1;
+    border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;
+  }
+  th.num,td.num{text-align:right;font-family:'SF Mono',Menlo,Monaco,Consolas,monospace;font-size:12px}
+  td{padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.04)}
+  tr:hover td{background:rgba(255,255,255,0.02)}
+  .barkod{color:#aaa;font-family:monospace;font-size:11px}
+  .sifra{color:#888;font-family:monospace;font-size:11px}
+  .kat-broj{color:#4ade80;font-family:monospace;font-size:11px;font-weight:600}
+  .stanje-pos{color:#4ade80;font-weight:600}
+  .stanje-neg{color:#fca5a5;font-weight:600}
+  .stanje-zero{color:#666}
+  .vrijednost{color:#ffd700;font-weight:600}
+  
+  /* Empty state */
+  .empty{text-align:center;padding:60px 20px;color:#666}
+  .empty .icon{font-size:48px;margin-bottom:12px;display:block;opacity:0.4}
+  
+  /* Loader */
+  .loader{display:none;text-align:center;padding:30px}
+  .loader.show{display:block}
+  .spinner{
+    width:40px;height:40px;margin:0 auto 14px;
+    border:3px solid rgba(255,255,255,0.1);border-top-color:#4ade80;
+    border-radius:50%;animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  
+  /* Mobile */
+  @media (max-width:600px){
+    .container{padding:20px 14px}
+    header{flex-wrap:wrap}
+    .stats{grid-template-columns:repeat(2,1fr)}
+    th,td{padding:6px 8px;font-size:11px}
+    .search{width:130px}
+    .actions{flex-direction:column}
+    .btn{width:100%;justify-content:center}
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <header>
+    <img src="../gr-logo.png" alt="GR" />
+    <div class="header-text">
+      <h1>📦 Stanje Robe PDF→CSV</h1>
+      <div class="sub">Konverzija PDF stanja zalihe u CSV · Veleprodaja · 100% u browseru</div>
+    </div>
+    <a href="/" class="back-link">← Tools</a>
+  </header>
+
+  <!-- Drop zone -->
+  <label class="dropzone" id="dropzone">
+    <span class="icon">📦</span>
+    <div class="text">Povuci PDF stanja zalihe ovdje ili klikni za odabir</div>
+    <div class="sub">Format: <code>Veleprodaja stanje zalihe.pdf</code></div>
+    <input type="file" id="fileInput" accept=".pdf,application/pdf" />
+  </label>
+
+  <!-- Status -->
+  <div class="status" id="status"></div>
+
+  <!-- Loader -->
+  <div class="loader" id="loader">
+    <div class="spinner"></div>
+    <div style="color:#bbb;font-size:13px" id="loaderText">Obrađujem PDF...</div>
+  </div>
+
+  <!-- Results -->
+  <div id="results" style="display:none">
+    
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">Proizvoda</div>
+        <div class="stat-value" id="statCount">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Ukupna vrijednost</div>
+        <div class="stat-value gold" id="statTotal">0.00</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Aktivnih (stanje &gt;0)</div>
+        <div class="stat-value green" id="statActive">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Bez stanja</div>
+        <div class="stat-value red" id="statZero">0</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="btnDownload">
+        💾 Preuzmi CSV
+      </button>
+      <button class="btn btn-secondary" id="btnCopy">
+        📋 Kopiraj CSV
+      </button>
+      <button class="btn btn-secondary" id="btnReset">
+        🔄 Novi PDF
+      </button>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-header">
+        <strong>📊 Pregled podataka</strong>
+        <div class="filter-row">
+          <select class="filter-select" id="stockFilter">
+            <option value="all">Sva stanja</option>
+            <option value="positive">Samo &gt; 0</option>
+            <option value="zero">Samo 0</option>
+            <option value="negative">Samo &lt; 0</option>
+          </select>
+          <input type="search" class="search" id="searchInput" placeholder="🔍 Naziv, barkod, šifra..." />
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table id="resultsTable">
+          <thead>
+            <tr>
+              <th style="width:110px">Barkod</th>
+              <th style="width:70px">Šifra</th>
+              <th style="width:90px">Kat. broj</th>
+              <th>Naziv</th>
+              <th class="num" style="width:80px">Stanje</th>
+              <th class="num" style="width:90px">Cijena</th>
+              <th class="num" style="width:110px">Vrijednost</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Empty state -->
+  <div class="empty" id="empty">
+    <span class="icon">📂</span>
+    <div>Učitaj PDF da počneš</div>
+  </div>
+
+</div>
+
+<script>
+// pdf.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const $ = id => document.getElementById(id);
+let parsedData = [];
+let csvContent = '';
+
+// ============== Helpers ==============
+function showStatus(msg, type){
+  const s = $('status');
+  s.className = 'status show ' + type;
+  s.innerHTML = msg;
+  if(type === 'success') setTimeout(()=>s.classList.remove('show'), 5000);
+}
+
+function fmtNum(n){
+  return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+// Parse EU number "38.848,76" → 38848.76
+function parseEUNum(s){
+  if(!s) return 0;
+  s = String(s).trim();
+  // Has both . and , → EU format with thousands separator
+  if(s.includes('.') && s.includes(',')){
+    return parseFloat(s.replace(/\./g, '').replace(',', '.'));
+  }
+  if(s.includes(',')){
+    return parseFloat(s.replace(',', '.'));
+  }
+  return parseFloat(s);
+}
+
+// ============== Drop Zone ==============
+const dz = $('dropzone');
+const fi = $('fileInput');
+
+dz.addEventListener('dragover', e => {
+  e.preventDefault();
+  dz.classList.add('drag');
+});
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('drag');
+  if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fi.addEventListener('change', e => {
+  if(e.target.files.length) handleFile(e.target.files[0]);
+});
+
+// ============== File Handler ==============
+async function handleFile(file){
+  if(!file.name.toLowerCase().endsWith('.pdf')){
+    showStatus('❌ Molim učitaj PDF fajl', 'error');
+    return;
+  }
+  
+  dz.classList.add('has-file');
+  dz.querySelector('.text').textContent = '✓ ' + file.name;
+  dz.querySelector('.sub').textContent = (file.size/1024).toFixed(1) + ' KB';
+  
+  $('loader').classList.add('show');
+  $('results').style.display = 'none';
+  $('empty').style.display = 'none';
+  $('status').classList.remove('show');
+  
+  try {
+    const buffer = await file.arrayBuffer();
+    const rows = await parsePDF(buffer);
+    
+    if(rows.length === 0){
+      showStatus('⚠️ Nije pronađen nijedan proizvod. Provjeri format PDF-a.', 'warn');
+      $('loader').classList.remove('show');
+      $('empty').style.display = 'block';
+      return;
+    }
+    
+    parsedData = rows;
+    csvContent = buildCSV(rows);
+    renderResults(rows);
+    showStatus(`✅ Uspješno! Pronađeno <strong>${rows.length}</strong> proizvoda`, 'success');
+  } catch(err){
+    console.error(err);
+    showStatus('❌ Greška pri obradi: ' + err.message, 'error');
+    $('empty').style.display = 'block';
+  }
+  $('loader').classList.remove('show');
+}
+
+// ============== PDF Parser (mirroring Python pdfplumber.extract_words logic) ==============
+async function parsePDF(buffer){
+  const pdf = await pdfjsLib.getDocument({data: buffer}).promise;
+  const allRows = [];
+  
+  for(let p = 1; p <= pdf.numPages; p++){
+    $('loaderText').textContent = `Obrađujem stranicu ${p} / ${pdf.numPages}...`;
+    
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    const viewport = page.getViewport({scale: 1});
+    const pageHeight = viewport.height;
+    
+    // Group text items into "words" with x0/x1/top coordinates
+    // (similar to pdfplumber's extract_words())
+    const words = content.items.map(item => {
+      // pdf.js uses bottom-up coords; convert to top-down like pdfplumber
+      const x0 = item.transform[4];
+      const y = item.transform[5];
+      const top = pageHeight - y - item.height;
+      return {
+        text: item.str.trim(),
+        x0,
+        x1: x0 + item.width,
+        top,
+        height: item.height
+      };
+    }).filter(w => w.text.length > 0);
+    
+    // Group by row (using top coordinate, rounded to nearest 2 like Python script)
+    const rowMap = {};
+    for(const w of words){
+      const rowKey = Math.round(w.top / 2) * 2;
+      if(!rowMap[rowKey]) rowMap[rowKey] = [];
+      rowMap[rowKey].push(w);
+    }
+    
+    // Process rows top→bottom
+    const sortedRows = Object.keys(rowMap).map(Number).sort((a,b) => a - b);
+    
+    const skipFirstWords = ['Golden','Poslovni','Veleprodaja','Sifra','Šifra','Strana','Ukupno','(Cijena','Stanje','Naziv','Jed.m.','Kat.'];
+    
+    for(const rowKey of sortedRows){
+      const rowWords = rowMap[rowKey].sort((a,b) => a.x0 - b.x0);
+      if(rowWords.length === 0) continue;
+      
+      const firstX = rowWords[0].x0;
+      const firstT = rowWords[0].text;
+      
+      // Skip header/footer rows
+      if(skipFirstWords.includes(firstT)) continue;
+      
+      let barkod = '';
+      let sifra = '';
+      let remaining = [];
+      
+      // EAN barkod (x ~ 48, 8-13 digits)
+      if(firstX < 60 && /^\d{8,13}$/.test(firstT)){
+        barkod = firstT;
+        remaining = rowWords.slice(1);
+      }
+      // Short sifra (x ~ 85-125, only digits)
+      else if(firstX > 80 && firstX < 125 && /^\d+$/.test(firstT)){
+        sifra = firstT;
+        remaining = rowWords.slice(1);
+      }
+      else {
+        continue;
+      }
+      
+      let cat = '';
+      const nameParts = [];
+      let stanje = '';
+      let cijena = '';
+      let vrijednost = '';
+      
+      for(const w of remaining){
+        const x = w.x0;
+        const t = w.text;
+        
+        // Kategorija broj (x 108-180, like "M-GPL-UX4")
+        if(x > 108 && x < 180 && /^[A-Z0-9][\w\-\.]+$/.test(t) && t.length > 2 
+           && !['GR','KOM','LAK','ZA','EU','SET','GEL','TOP','COAT','BOJA'].includes(t)){
+          cat = t;
+        }
+        // Skip "KOM" unit at x>380
+        else if(t === 'KOM' && x > 380){
+          // skip
+        }
+        // Stanje (x 425-496, format "-?[\d.]+,\d{2}")
+        else if(x > 425 && x < 496 && /^-?[\d\.]+,\d{2}$/.test(t)){
+          stanje = t;
+        }
+        // Cijena (x 492-532, format "[\d]+,\d{2}")
+        else if(x > 492 && x < 532 && /^[\d]+,\d{2}$/.test(t)){
+          cijena = t;
+        }
+        // Vrijednost (x > 525, format "-?[\d.]+,\d{2}")
+        else if(x > 525 && /^-?[\d\.]+,\d{2}$/.test(t)){
+          vrijednost = t;
+        }
+        // Naziv parts (x 175-396)
+        else if(x > 175 && x < 396){
+          nameParts.push(t);
+        }
+      }
+      
+      // Clean name (remove "GR -", "GR LAK ZA", "GR" suffixes like Python)
+      let name = nameParts.join(' ');
+      name = name.replace(/\s+GR\s*[-]?\s*(LAK ZA|ZA|-)?\s*$/, '').trim();
+      name = name.replace(/\s+GR\s*$/, '').trim();
+      
+      if(!name && !barkod && !sifra) continue;
+      
+      allRows.push({
+        barkod,
+        sifra,
+        kat_broj: cat,
+        naziv: name,
+        stanje,
+        cijena,
+        vrijednost
+      });
+    }
+  }
+  
+  return allRows;
+}
+
+// ============== Build CSV ==============
+function buildCSV(rows){
+  let csv = 'Barkod;Sifra;Kat_broj;Naziv;Stanje;Cijena;Vrijednost\n';
+  for(const r of rows){
+    const naziv = (r.naziv || '').replace(/"/g, '').replace(/;/g, ',');
+    csv += `${r.barkod};${r.sifra};${r.kat_broj};${naziv};${r.stanje};${r.cijena};${r.vrijednost}\n`;
+  }
+  return csv;
+}
+
+// ============== Render ==============
+function renderResults(rows){
+  $('results').style.display = 'block';
+  
+  // Stats
+  let totalValue = 0;
+  let activeCount = 0;
+  let zeroCount = 0;
+  
+  for(const r of rows){
+    const stanjeNum = parseEUNum(r.stanje);
+    const vrijednostNum = parseEUNum(r.vrijednost);
+    totalValue += vrijednostNum;
+    if(stanjeNum > 0) activeCount++;
+    else if(stanjeNum === 0) zeroCount++;
+  }
+  
+  $('statCount').textContent = rows.length;
+  $('statTotal').textContent = fmtNum(totalValue);
+  $('statActive').textContent = activeCount;
+  $('statZero').textContent = zeroCount;
+  
+  renderTable(rows);
+}
+
+function renderTable(rows){
+  const tb = $('tableBody');
+  tb.innerHTML = rows.map(r => {
+    const stanjeNum = parseEUNum(r.stanje);
+    let stanjeClass = 'stanje-zero';
+    if(stanjeNum > 0) stanjeClass = 'stanje-pos';
+    else if(stanjeNum < 0) stanjeClass = 'stanje-neg';
+    
+    return `
+    <tr>
+      <td><span class="barkod">${r.barkod || '—'}</span></td>
+      <td><span class="sifra">${r.sifra || '—'}</span></td>
+      <td><span class="kat-broj">${r.kat_broj || '—'}</span></td>
+      <td>${escapeHtml(r.naziv || '')}</td>
+      <td class="num"><span class="${stanjeClass}">${r.stanje || '—'}</span></td>
+      <td class="num">${r.cijena || '—'}</td>
+      <td class="num"><span class="vrijednost">${r.vrijednost || '—'}</span></td>
+    </tr>
+  `}).join('');
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+// ============== Filters ==============
+function applyFilters(){
+  const q = $('searchInput').value.toLowerCase().trim();
+  const sf = $('stockFilter').value;
+  
+  let filtered = parsedData;
+  
+  if(q){
+    filtered = filtered.filter(r =>
+      (r.naziv || '').toLowerCase().includes(q) ||
+      (r.barkod || '').includes(q) ||
+      (r.sifra || '').includes(q) ||
+      (r.kat_broj || '').toLowerCase().includes(q)
+    );
+  }
+  
+  if(sf !== 'all'){
+    filtered = filtered.filter(r => {
+      const n = parseEUNum(r.stanje);
+      if(sf === 'positive') return n > 0;
+      if(sf === 'zero') return n === 0;
+      if(sf === 'negative') return n < 0;
+      return true;
+    });
+  }
+  
+  renderTable(filtered);
+}
+
+$('searchInput').addEventListener('input', applyFilters);
+$('stockFilter').addEventListener('change', applyFilters);
+
+// ============== Buttons ==============
+$('btnDownload').addEventListener('click', () => {
+  const blob = new Blob(['\ufeff' + csvContent], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  a.download = `stanje_zalihe_${today}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showStatus('💾 CSV preuzet', 'success');
+});
+
+$('btnCopy').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(csvContent);
+    showStatus('📋 CSV kopiran u clipboard', 'success');
+  } catch(e) {
+    showStatus('❌ Kopiranje nije moguće: ' + e.message, 'error');
+  }
+});
+
+$('btnReset').addEventListener('click', () => {
+  parsedData = [];
+  csvContent = '';
+  $('results').style.display = 'none';
+  $('empty').style.display = 'block';
+  $('status').classList.remove('show');
+  dz.classList.remove('has-file');
+  dz.querySelector('.text').textContent = 'Povuci PDF stanja zalihe ovdje ili klikni za odabir';
+  dz.querySelector('.sub').innerHTML = 'Format: <code>Veleprodaja stanje zalihe.pdf</code>';
+  fi.value = '';
+});
+</script>
+</body>
+</html>
