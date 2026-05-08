@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="bs">
+<head>
+<meta charset="UTF-8">
+<title>Dugovanja PDF→CSV · Golden Rose</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="../gr-logo.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+    background:#000;color:#fff;min-height:100vh;line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  body::before{
+    content:'';position:fixed;inset:0;
+    background:radial-gradient(ellipse 80% 50% at 50% 0%, rgba(200,51,58,0.06), transparent 60%);
+    pointer-events:none;z-index:0;
+  }
+  
+  .container{max-width:1100px;margin:0 auto;padding:30px 20px;position:relative;z-index:1}
+  
+  /* Header */
+  header{
+    display:flex;align-items:center;gap:14px;margin-bottom:30px;
+    padding-bottom:20px;border-bottom:1px solid rgba(255,255,255,0.08);
+  }
+  header img{height:44px;width:auto}
+  .header-text{flex:1}
+  .header-text h1{font-size:18px;font-weight:600;margin-bottom:3px}
+  .header-text .sub{font-size:12px;color:#888}
+  .back-link{
+    color:#999;text-decoration:none;font-size:12px;
+    padding:6px 12px;border:1px solid rgba(255,255,255,0.15);
+    border-radius:8px;transition:all 0.2s;
+  }
+  .back-link:hover{background:rgba(255,255,255,0.05);color:#ffd700;border-color:rgba(255,215,0,0.3)}
+  
+  /* Drop zone */
+  .dropzone{
+    border:2px dashed rgba(255,255,255,0.2);border-radius:16px;
+    padding:60px 30px;text-align:center;cursor:pointer;
+    transition:all 0.3s;background:rgba(255,255,255,0.02);
+    margin-bottom:24px;
+  }
+  .dropzone:hover{border-color:rgba(255,215,0,0.4);background:rgba(255,215,0,0.03)}
+  .dropzone.drag{border-color:#ffd700;background:rgba(255,215,0,0.06);transform:scale(1.005)}
+  .dropzone.has-file{border-style:solid;border-color:rgba(34,197,94,0.4);background:rgba(34,197,94,0.04)}
+  .dropzone .icon{font-size:50px;margin-bottom:14px;display:block;opacity:0.7}
+  .dropzone .text{font-size:15px;color:#ddd;margin-bottom:6px;font-weight:500}
+  .dropzone .sub{font-size:12px;color:#888}
+  .dropzone input{display:none}
+  
+  /* Status */
+  .status{
+    padding:14px 18px;border-radius:10px;margin-bottom:20px;
+    font-size:13px;display:none;
+  }
+  .status.show{display:block;animation:fadeIn 0.3s}
+  .status.info{background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#93c5fd}
+  .status.success{background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#86efac}
+  .status.error{background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#fca5a5}
+  .status.warn{background:rgba(255,165,0,0.12);border:1px solid rgba(255,165,0,0.3);color:#fcd34d}
+  
+  /* Actions */
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+  .btn{
+    padding:11px 20px;border:none;border-radius:10px;cursor:pointer;
+    font-size:13px;font-weight:600;transition:all 0.2s;
+    display:inline-flex;align-items:center;gap:8px;
+    font-family:inherit;
+  }
+  .btn-primary{background:linear-gradient(135deg,#c8333a,#8a1f24);color:#fff}
+  .btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(200,51,58,0.4)}
+  .btn-success{background:linear-gradient(135deg,#16a34a,#15803d);color:#fff}
+  .btn-success:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(34,197,94,0.4)}
+  .btn-secondary{background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)}
+  .btn-secondary:hover{background:rgba(255,255,255,0.1)}
+  .btn:disabled{opacity:0.4;cursor:not-allowed}
+  
+  /* Stats */
+  .stats{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+    gap:12px;margin-bottom:20px;
+  }
+  .stat{
+    background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+    border-radius:10px;padding:14px;
+  }
+  .stat-label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+  .stat-value{font-size:20px;font-weight:700;color:#fff}
+  .stat-value.gold{color:#ffd700}
+  .stat-value.green{color:#4ade80}
+  
+  /* Table */
+  .table-wrap{
+    background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);
+    border-radius:14px;overflow:hidden;margin-bottom:20px;
+  }
+  .table-header{
+    padding:14px 18px;background:rgba(255,255,255,0.04);
+    border-bottom:1px solid rgba(255,255,255,0.08);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .table-header strong{font-size:13px}
+  .search{
+    background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);
+    color:#fff;padding:7px 12px;border-radius:8px;font-size:12px;
+    width:220px;font-family:inherit;
+  }
+  .search:focus{outline:none;border-color:rgba(255,215,0,0.4)}
+  .table-scroll{max-height:500px;overflow-y:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{
+    background:rgba(255,255,255,0.04);padding:11px 14px;text-align:left;
+    font-weight:600;color:#bbb;font-size:11px;text-transform:uppercase;
+    letter-spacing:0.5px;position:sticky;top:0;z-index:1;
+    border-bottom:1px solid rgba(255,255,255,0.08);
+  }
+  th.num,td.num{text-align:right}
+  td{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.04)}
+  tr:hover td{background:rgba(255,255,255,0.02)}
+  .partner-broj{color:#888;font-family:monospace;font-size:12px}
+  .saldo{color:#ffd700;font-weight:600;font-family:monospace}
+  
+  /* Empty state */
+  .empty{text-align:center;padding:60px 20px;color:#666}
+  .empty .icon{font-size:48px;margin-bottom:12px;display:block;opacity:0.4}
+  
+  /* Loader */
+  .loader{
+    display:none;text-align:center;padding:30px;
+  }
+  .loader.show{display:block}
+  .spinner{
+    width:40px;height:40px;margin:0 auto 14px;
+    border:3px solid rgba(255,255,255,0.1);border-top-color:#ffd700;
+    border-radius:50%;animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  
+  /* Mobile */
+  @media (max-width:600px){
+    .container{padding:20px 14px}
+    header{flex-wrap:wrap}
+    .stats{grid-template-columns:repeat(2,1fr)}
+    th,td{padding:8px 10px;font-size:12px}
+    .search{width:140px}
+    .actions{flex-direction:column}
+    .btn{width:100%;justify-content:center}
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <header>
+    <img src="../gr-logo.png" alt="GR" />
+    <div class="header-text">
+      <h1>📑 Dugovanja PDF→CSV</h1>
+      <div class="sub">Konverzija PDF dugovanja u CSV format · 100% u browseru</div>
+    </div>
+    <a href="/" class="back-link">← Tools</a>
+  </header>
+
+  <!-- Drop zone -->
+  <label class="dropzone" id="dropzone">
+    <span class="icon">📄</span>
+    <div class="text">Povuci PDF ovdje ili klikni za odabir</div>
+    <div class="sub">Format: <code>van_valute.pdf</code> ili sličan</div>
+    <input type="file" id="fileInput" accept=".pdf,application/pdf" />
+  </label>
+
+  <!-- Status -->
+  <div class="status" id="status"></div>
+
+  <!-- Loader -->
+  <div class="loader" id="loader">
+    <div class="spinner"></div>
+    <div style="color:#bbb;font-size:13px">Obrađujem PDF...</div>
+  </div>
+
+  <!-- Results -->
+  <div id="results" style="display:none">
+    
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">Kupaca</div>
+        <div class="stat-value" id="statCount">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Ukupan saldo</div>
+        <div class="stat-value gold" id="statTotal">0.00</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Prosjek</div>
+        <div class="stat-value" id="statAvg">0.00</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Najveći</div>
+        <div class="stat-value green" id="statMax">0.00</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="btnDownload">
+        💾 Preuzmi CSV
+      </button>
+      <button class="btn btn-secondary" id="btnCopy">
+        📋 Kopiraj CSV
+      </button>
+      <button class="btn btn-secondary" id="btnReset">
+        🔄 Novi PDF
+      </button>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-header">
+        <strong>📊 Pregled podataka</strong>
+        <input type="search" class="search" id="searchInput" placeholder="🔍 Pretraži kupca..." />
+      </div>
+      <div class="table-scroll">
+        <table id="resultsTable">
+          <thead>
+            <tr>
+              <th style="width:90px">Br.</th>
+              <th>Naziv kupca</th>
+              <th class="num" style="width:140px">Saldo (KM)</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Empty state -->
+  <div class="empty" id="empty">
+    <span class="icon">📂</span>
+    <div>Učitaj PDF da počneš</div>
+  </div>
+
+</div>
+
+<script>
+// pdf.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const $ = id => document.getElementById(id);
+let parsedData = [];
+let csvContent = '';
+
+// ============== UI Helpers ==============
+function showStatus(msg, type){
+  const s = $('status');
+  s.className = 'status show ' + type;
+  s.innerHTML = msg;
+  if(type === 'success') setTimeout(()=>s.classList.remove('show'), 5000);
+}
+function fmtNum(n){
+  return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+// ============== Drop Zone ==============
+const dz = $('dropzone');
+const fi = $('fileInput');
+
+dz.addEventListener('dragover', e => {
+  e.preventDefault();
+  dz.classList.add('drag');
+});
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('drag');
+  if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fi.addEventListener('change', e => {
+  if(e.target.files.length) handleFile(e.target.files[0]);
+});
+
+// ============== File handler ==============
+async function handleFile(file){
+  if(!file.name.toLowerCase().endsWith('.pdf')){
+    showStatus('❌ Molim učitaj PDF fajl', 'error');
+    return;
+  }
+  
+  dz.classList.add('has-file');
+  dz.querySelector('.text').textContent = '✓ ' + file.name;
+  dz.querySelector('.sub').textContent = (file.size/1024).toFixed(1) + ' KB';
+  
+  $('loader').classList.add('show');
+  $('results').style.display = 'none';
+  $('empty').style.display = 'none';
+  $('status').classList.remove('show');
+  
+  try {
+    const buffer = await file.arrayBuffer();
+    const text = await extractTextFromPDF(buffer);
+    const rows = parseDugovanja(text);
+    
+    if(rows.length === 0){
+      showStatus('⚠️ Nije pronađen nijedan kupac. Provjeri format PDF-a.', 'warn');
+      $('loader').classList.remove('show');
+      $('empty').style.display = 'block';
+      return;
+    }
+    
+    parsedData = rows;
+    csvContent = buildCSV(rows);
+    renderResults(rows);
+    showStatus(`✅ Uspješno! Pronađeno <strong>${rows.length}</strong> kupaca`, 'success');
+  } catch(err){
+    console.error(err);
+    showStatus('❌ Greška pri obradi: ' + err.message, 'error');
+    $('empty').style.display = 'block';
+  }
+  $('loader').classList.remove('show');
+}
+
+// ============== PDF text extraction ==============
+async function extractTextFromPDF(buffer){
+  const pdf = await pdfjsLib.getDocument({data: buffer}).promise;
+  let allText = '';
+  
+  for(let p = 1; p <= pdf.numPages; p++){
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    
+    // Group items by Y coordinate (line) - same as pdfplumber.extract_text()
+    const lineMap = {};
+    for(const it of content.items){
+      const y = Math.round(it.transform[5]);
+      if(!lineMap[y]) lineMap[y] = [];
+      lineMap[y].push({x: it.transform[4], text: it.str});
+    }
+    
+    // Sort lines top→bottom (PDF Y is bottom-up, so reverse)
+    const lines = Object.keys(lineMap)
+      .map(Number)
+      .sort((a,b) => b - a);
+    
+    for(const y of lines){
+      const sorted = lineMap[y].sort((a,b) => a.x - b.x);
+      const lineText = sorted.map(s => s.text).join(' ').trim();
+      if(lineText) allText += lineText + '\n';
+    }
+  }
+  
+  return allText;
+}
+
+// ============== Parser (same logic as Python) ==============
+function parseDugovanja(text){
+  const rows = [];
+  const skipPatterns = [
+    /Golden Rose/i,
+    /Poslovni objekat/i,
+    /Brčko Distrikt/i,
+    /Kupac\s+Datum/i,
+    /Ukupno za/i,
+    /Strana/i,
+    /Datum:/i
+  ];
+  
+  for(let line of text.split('\n')){
+    line = line.trim().replace(/\s+/g, ' ');
+    if(!line) continue;
+    
+    // Skip header/footer
+    if(skipPatterns.some(p => p.test(line))) continue;
+    
+    // Match: "317 BINGO D.O.O 38,848.76" or "317 BINGO D.O.O 38.848,76"
+    const m = line.match(/^(\d+)\s+(.+?)\s+([\d,\.]+)\s*$/);
+    if(!m) continue;
+    
+    const broj = m[1].trim();
+    const naziv = m[2].trim();
+    let saldoStr = m[3].trim();
+    
+    // Normalize: handle both EU "38.848,76" and US "38,848.76" formats
+    let saldo;
+    if(saldoStr.includes(',') && saldoStr.includes('.')){
+      // Determine which is decimal: last position wins
+      const lastComma = saldoStr.lastIndexOf(',');
+      const lastDot = saldoStr.lastIndexOf('.');
+      if(lastDot > lastComma){
+        // US format: 38,848.76
+        saldo = parseFloat(saldoStr.replace(/,/g, ''));
+      } else {
+        // EU format: 38.848,76
+        saldo = parseFloat(saldoStr.replace(/\./g, '').replace(',', '.'));
+      }
+    } else if(saldoStr.includes(',')){
+      // Only comma — likely decimal: "38,76"
+      saldo = parseFloat(saldoStr.replace(',', '.'));
+    } else {
+      saldo = parseFloat(saldoStr);
+    }
+    
+    if(isNaN(saldo) || saldo <= 0) continue;
+    
+    // Skip if naziv is too short or just numbers
+    if(naziv.length < 3 || /^\d+$/.test(naziv)) continue;
+    
+    rows.push({partner_broj: broj, naziv, saldo});
+  }
+  
+  return rows;
+}
+
+// ============== Build CSV ==============
+function buildCSV(rows){
+  let csv = 'Partner_broj;Naziv;Saldo\n';
+  for(const r of rows){
+    const naziv = r.naziv.replace(/"/g, '').replace(/;/g, ',');
+    csv += `${r.partner_broj};${naziv};${r.saldo.toFixed(2)}\n`;
+  }
+  return csv;
+}
+
+// ============== Render results ==============
+function renderResults(rows){
+  $('results').style.display = 'block';
+  
+  // Stats
+  const total = rows.reduce((s,r) => s + r.saldo, 0);
+  const max = Math.max(...rows.map(r => r.saldo));
+  const avg = total / rows.length;
+  
+  $('statCount').textContent = rows.length;
+  $('statTotal').textContent = fmtNum(total);
+  $('statAvg').textContent = fmtNum(avg);
+  $('statMax').textContent = fmtNum(max);
+  
+  // Table
+  renderTable(rows);
+}
+
+function renderTable(rows){
+  const tb = $('tableBody');
+  tb.innerHTML = rows.map(r => `
+    <tr>
+      <td><span class="partner-broj">${r.partner_broj}</span></td>
+      <td>${escapeHtml(r.naziv)}</td>
+      <td class="num"><span class="saldo">${fmtNum(r.saldo)}</span></td>
+    </tr>
+  `).join('');
+}
+
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+// ============== Search ==============
+$('searchInput').addEventListener('input', e => {
+  const q = e.target.value.toLowerCase().trim();
+  if(!q) return renderTable(parsedData);
+  const filtered = parsedData.filter(r =>
+    r.naziv.toLowerCase().includes(q) || r.partner_broj.includes(q)
+  );
+  renderTable(filtered);
+});
+
+// ============== Buttons ==============
+$('btnDownload').addEventListener('click', () => {
+  const blob = new Blob(['\ufeff' + csvContent], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  a.download = `dugovanja_${today}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showStatus('💾 CSV preuzet', 'success');
+});
+
+$('btnCopy').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(csvContent);
+    showStatus('📋 CSV kopiran u clipboard', 'success');
+  } catch(e) {
+    showStatus('❌ Kopiranje nije moguće: ' + e.message, 'error');
+  }
+});
+
+$('btnReset').addEventListener('click', () => {
+  parsedData = [];
+  csvContent = '';
+  $('results').style.display = 'none';
+  $('empty').style.display = 'block';
+  $('status').classList.remove('show');
+  dz.classList.remove('has-file');
+  dz.querySelector('.text').textContent = 'Povuci PDF ovdje ili klikni za odabir';
+  dz.querySelector('.sub').innerHTML = 'Format: <code>van_valute.pdf</code> ili sličan';
+  fi.value = '';
+});
+</script>
+</body>
+</html>
