@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="bs">
+<head>
+<meta charset="UTF-8">
+<title>Promet MP PDF→CSV · Golden Rose</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="../gr-logo.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+    background:#000;color:#fff;min-height:100vh;line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  body::before{
+    content:'';position:fixed;inset:0;
+    background:radial-gradient(ellipse 80% 50% at 50% 0%, rgba(124,58,237,0.06), transparent 60%);
+    pointer-events:none;z-index:0;
+  }
+  
+  .container{max-width:1300px;margin:0 auto;padding:30px 20px;position:relative;z-index:1}
+  
+  /* Header */
+  header{
+    display:flex;align-items:center;gap:14px;margin-bottom:30px;
+    padding-bottom:20px;border-bottom:1px solid rgba(255,255,255,0.08);
+  }
+  header img{height:44px;width:auto}
+  .header-text{flex:1}
+  .header-text h1{font-size:18px;font-weight:600;margin-bottom:3px}
+  .header-text .sub{font-size:12px;color:#888}
+  .back-link{
+    color:#999;text-decoration:none;font-size:12px;
+    padding:6px 12px;border:1px solid rgba(255,255,255,0.15);
+    border-radius:8px;transition:all 0.2s;
+  }
+  .back-link:hover{background:rgba(255,255,255,0.05);color:#ffd700;border-color:rgba(255,215,0,0.3)}
+  
+  /* Drop zone */
+  .dropzone{
+    border:2px dashed rgba(255,255,255,0.2);border-radius:16px;
+    padding:50px 30px;text-align:center;cursor:pointer;
+    transition:all 0.3s;background:rgba(255,255,255,0.02);
+    margin-bottom:24px;
+  }
+  .dropzone:hover{border-color:rgba(124,58,237,0.4);background:rgba(124,58,237,0.03)}
+  .dropzone.drag{border-color:#a78bfa;background:rgba(124,58,237,0.06);transform:scale(1.005)}
+  .dropzone.has-file{border-style:solid;border-color:rgba(124,58,237,0.4);background:rgba(124,58,237,0.04)}
+  .dropzone .icon{font-size:46px;margin-bottom:12px;display:block;opacity:0.7}
+  .dropzone .text{font-size:15px;color:#ddd;margin-bottom:6px;font-weight:500}
+  .dropzone .sub{font-size:12px;color:#888}
+  .dropzone .multi-hint{margin-top:6px;font-size:11px;color:#a78bfa;font-weight:600;letter-spacing:0.5px}
+  .dropzone input{display:none}
+  
+  /* Status */
+  .status{
+    padding:14px 18px;border-radius:10px;margin-bottom:20px;
+    font-size:13px;display:none;
+  }
+  .status.show{display:block;animation:fadeIn 0.3s}
+  .status.info{background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#93c5fd}
+  .status.success{background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#86efac}
+  .status.error{background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#fca5a5}
+  .status.warn{background:rgba(255,165,0,0.12);border:1px solid rgba(255,165,0,0.3);color:#fcd34d}
+  
+  /* Actions */
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+  .btn{
+    padding:11px 20px;border:none;border-radius:10px;cursor:pointer;
+    font-size:13px;font-weight:600;transition:all 0.2s;
+    display:inline-flex;align-items:center;gap:8px;font-family:inherit;
+  }
+  .btn-primary{background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff}
+  .btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(124,58,237,0.4)}
+  .btn-secondary{background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)}
+  .btn-secondary:hover{background:rgba(255,255,255,0.1)}
+  .btn:disabled{opacity:0.4;cursor:not-allowed}
+  
+  /* PJ Cards */
+  .pj-list{display:flex;flex-direction:column;gap:14px;margin-bottom:20px}
+  .pj-card{
+    background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);
+    border-radius:12px;overflow:hidden;
+  }
+  .pj-card.warn{border-color:rgba(255,165,0,0.35)}
+  .pj-card.error{border-color:rgba(239,68,68,0.35)}
+  .pj-head{
+    padding:14px 18px;display:flex;justify-content:space-between;align-items:center;
+    background:rgba(124,58,237,0.08);border-bottom:1px solid rgba(255,255,255,0.06);
+    cursor:pointer;flex-wrap:wrap;gap:10px;user-select:none;
+  }
+  .pj-head:hover{background:rgba(124,58,237,0.12)}
+  .pj-card.warn .pj-head{background:rgba(255,165,0,0.08)}
+  .pj-card.error .pj-head{background:rgba(239,68,68,0.08)}
+  .pj-info{flex:1;min-width:200px}
+  .pj-title{font-size:15px;font-weight:600;margin-bottom:3px;display:flex;align-items:center;gap:8px}
+  .pj-meta{font-size:11px;color:#999}
+  .pj-meta strong{color:#ccc;font-weight:600}
+  .pj-totals{display:flex;gap:14px;flex-wrap:wrap;font-size:11px}
+  .pj-total-item{display:flex;flex-direction:column;align-items:flex-end}
+  .pj-total-label{color:#888;text-transform:uppercase;letter-spacing:0.6px;font-size:9px}
+  .pj-total-val{font-weight:700;font-size:13px;color:#fff;font-family:monospace}
+  .pj-total-val.gold{color:#ffd700}
+  .pj-status{font-size:10px;padding:3px 8px;border-radius:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase}
+  .pj-status.ok{background:rgba(34,197,94,0.18);color:#5eea8c;border:1px solid rgba(34,197,94,0.3)}
+  .pj-status.warn{background:rgba(255,165,0,0.18);color:#fbbf24;border:1px solid rgba(255,165,0,0.3)}
+  .pj-status.error{background:rgba(239,68,68,0.18);color:#fca5a5;border:1px solid rgba(239,68,68,0.3)}
+  
+  .pj-body{display:none;padding:0}
+  .pj-body.open{display:block}
+  
+  .pj-toolbar{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:10px 18px;gap:8px;flex-wrap:wrap;border-bottom:1px solid rgba(255,255,255,0.05);
+  }
+  .pj-toolbar-info{font-size:11px;color:#888}
+  .pj-toolbar-actions{display:flex;gap:6px}
+  .btn-mini{
+    padding:5px 11px;border:none;border-radius:7px;cursor:pointer;
+    font-size:11px;font-weight:600;font-family:inherit;
+    background:rgba(255,255,255,0.06);color:#ddd;border:1px solid rgba(255,255,255,0.1);
+    transition:all 0.2s;
+  }
+  .btn-mini:hover{background:rgba(255,255,255,0.12)}
+  .btn-mini.primary{background:rgba(124,58,237,0.2);color:#c4b5fd;border-color:rgba(124,58,237,0.35)}
+  
+  .pj-table{max-height:340px;overflow:auto}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{
+    background:rgba(255,255,255,0.04);padding:9px 12px;text-align:left;
+    font-weight:600;color:#bbb;font-size:10px;text-transform:uppercase;
+    letter-spacing:0.4px;position:sticky;top:0;z-index:1;
+    border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;
+  }
+  th.num,td.num{text-align:right;font-family:'SF Mono',Menlo,Monaco,Consolas,monospace}
+  td{padding:7px 12px;border-bottom:1px solid rgba(255,255,255,0.04)}
+  tr:hover td{background:rgba(255,255,255,0.02)}
+  .barcode{color:#aaa;font-family:monospace;font-size:11px}
+  .qty{color:#86efac;font-weight:600}
+  .iznos{color:#ffd700;font-weight:600}
+  
+  /* Stats */
+  .stats{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+    gap:12px;margin-bottom:20px;
+  }
+  .stat{
+    background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+    border-radius:10px;padding:14px;
+  }
+  .stat-label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+  .stat-value{font-size:20px;font-weight:700;color:#fff}
+  .stat-value.gold{color:#ffd700}
+  .stat-value.green{color:#4ade80}
+  .stat-value.purple{color:#c4b5fd}
+  
+  /* Empty + Loader */
+  .empty{text-align:center;padding:60px 20px;color:#666}
+  .empty .icon{font-size:48px;margin-bottom:12px;display:block;opacity:0.4}
+  .loader{display:none;text-align:center;padding:30px}
+  .loader.show{display:block}
+  .spinner{
+    width:40px;height:40px;margin:0 auto 14px;
+    border:3px solid rgba(255,255,255,0.1);border-top-color:#a78bfa;
+    border-radius:50%;animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  
+  /* Mobile */
+  @media (max-width:600px){
+    .container{padding:20px 14px}
+    header{flex-wrap:wrap}
+    .stats{grid-template-columns:repeat(2,1fr)}
+    th,td{padding:6px 8px;font-size:11px}
+    .pj-totals{width:100%;justify-content:space-between}
+    .actions{flex-direction:column}
+    .btn{width:100%;justify-content:center}
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <header>
+    <img src="../gr-logo.png" alt="GR" />
+    <div class="header-text">
+      <h1>🛒 Promet MP PDF→CSV</h1>
+      <div class="sub">Pregled izlaza po kupcima · Multi-PDF batch · 100% u browseru</div>
+    </div>
+    <a href="/" class="back-link">← Tools</a>
+  </header>
+
+  <!-- Drop zone -->
+  <label class="dropzone" id="dropzone">
+    <span class="icon">🛒</span>
+    <div class="text">Povuci PDF(ove) ovdje ili klikni za odabir</div>
+    <div class="sub">Format: <code>"Pregled izlaza po kupcima"</code></div>
+    <div class="multi-hint">📦 Više PDF-ova odjednom — sve MP filijale u batch</div>
+    <input type="file" id="fileInput" accept=".pdf,application/pdf" multiple />
+  </label>
+
+  <!-- Status -->
+  <div class="status" id="status"></div>
+
+  <!-- Loader -->
+  <div class="loader" id="loader">
+    <div class="spinner"></div>
+    <div style="color:#bbb;font-size:13px" id="loaderText">Obrađujem PDF...</div>
+  </div>
+
+  <!-- Results -->
+  <div id="results" style="display:none">
+    
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">PJ filijala</div>
+        <div class="stat-value purple" id="statPJ">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Ukupno proizvoda</div>
+        <div class="stat-value" id="statItems">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Ukupno komada</div>
+        <div class="stat-value green" id="statQty">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Ukupan promet</div>
+        <div class="stat-value gold" id="statKM">0.00</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="btnDownloadAll">
+        💾 Preuzmi sve (ZIP)
+      </button>
+      <button class="btn btn-secondary" id="btnReset">
+        🔄 Novi PDF-ovi
+      </button>
+    </div>
+
+    <div class="pj-list" id="pjList"></div>
+  </div>
+
+  <!-- Empty state -->
+  <div class="empty" id="empty">
+    <span class="icon">📂</span>
+    <div>Učitaj PDF(ove) da počneš</div>
+  </div>
+
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const $ = id => document.getElementById(id);
+let parsedPDFs = [];  // [{filename, data, csv, status}]
+
+function showStatus(msg, type){
+  const s = $('status');
+  s.className = 'status show ' + type;
+  s.innerHTML = msg;
+  if(type === 'success') setTimeout(()=>s.classList.remove('show'), 6000);
+}
+function fmtNum(n){
+  return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+function fmtCSVNum(n){
+  return n.toFixed(2).replace('.', ',');
+}
+function parseEUNum(s){
+  if(!s) return 0;
+  s = String(s).trim();
+  if(s.includes('.') && s.includes(',')){
+    return parseFloat(s.replace(/\./g, '').replace(',', '.'));
+  }
+  if(s.includes(',')){
+    return parseFloat(s.replace(',', '.'));
+  }
+  return parseFloat(s);
+}
+function parseDateEU(s){
+  if(!s) return '';
+  const parts = s.trim().split('/');
+  if(parts.length !== 3) return '';
+  const [d, m, y] = parts.map(p => parseInt(p, 10));
+  if(isNaN(d) || isNaN(m) || isNaN(y)) return '';
+  return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+// ============== Drop Zone ==============
+const dz = $('dropzone');
+const fi = $('fileInput');
+
+dz.addEventListener('dragover', e => {
+  e.preventDefault();
+  dz.classList.add('drag');
+});
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('drag');
+  if(e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+});
+fi.addEventListener('change', e => {
+  if(e.target.files.length) handleFiles(e.target.files);
+});
+
+// ============== File Handler — multi-file batch ==============
+async function handleFiles(fileList){
+  const files = Array.from(fileList).filter(f => f.name.toLowerCase().endsWith('.pdf'));
+  if(files.length === 0){
+    showStatus('❌ Molim učitaj jedan ili više PDF fajlova', 'error');
+    return;
+  }
+  
+  dz.classList.add('has-file');
+  dz.querySelector('.text').textContent = `✓ ${files.length} PDF ${files.length===1?'fajl':'fajla'}`;
+  dz.querySelector('.sub').textContent = files.map(f => f.name).slice(0,3).join(', ') + (files.length>3?', ...':'');
+  
+  $('loader').classList.add('show');
+  $('results').style.display = 'none';
+  $('empty').style.display = 'none';
+  $('status').classList.remove('show');
+  
+  parsedPDFs = [];
+  let okCount = 0, warnCount = 0, errCount = 0;
+  
+  for(let i = 0; i < files.length; i++){
+    const file = files[i];
+    $('loaderText').textContent = `Obrađujem (${i+1}/${files.length}): ${file.name}`;
+    
+    try {
+      const buffer = await file.arrayBuffer();
+      const data = await parsePDF(buffer);
+      const status = checkStatus(data);
+      const csv = buildCSV(data);
+      parsedPDFs.push({ filename: file.name, data, csv, status });
+      
+      if(status.level === 'ok') okCount++;
+      else if(status.level === 'warn') warnCount++;
+      else errCount++;
+    } catch(err){
+      console.error(file.name, err);
+      parsedPDFs.push({ 
+        filename: file.name, 
+        data: null, 
+        csv: '', 
+        status: { level: 'error', msg: err.message }
+      });
+      errCount++;
+    }
+  }
+  
+  $('loader').classList.remove('show');
+  
+  if(parsedPDFs.length === 0){
+    showStatus('⚠️ Nije bilo uspješno obrađenih PDF-ova', 'warn');
+    $('empty').style.display = 'block';
+    return;
+  }
+  
+  renderResults();
+  
+  let msg = `✅ Obrađeno <strong>${parsedPDFs.length}</strong> PDF-ova`;
+  if(warnCount) msg += ` · <span style="color:#fbbf24">${warnCount} sa upozorenjem</span>`;
+  if(errCount) msg += ` · <span style="color:#fca5a5">${errCount} grešaka</span>`;
+  showStatus(msg, errCount > 0 ? 'warn' : 'success');
+}
+
+// ============== PDF Parser (mirroring Python promet_u_csv.py) ==============
+async function parsePDF(buffer){
+  const pdf = await pdfjsLib.getDocument({data: buffer}).promise;
+  const allLines = []; // [{y, words, page}]
+  
+  for(let p = 1; p <= pdf.numPages; p++){
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    const viewport = page.getViewport({scale: 1});
+    const pageHeight = viewport.height;
+    
+    // Keep raw text items (don't split) - we'll handle merged strings via regex
+    const words = content.items
+      .filter(item => item.str && item.str.trim().length > 0)
+      .map(item => ({
+        text: item.str.trim(),
+        x0: item.transform[4],
+        x1: item.transform[4] + item.width,
+        y: item.transform[5],
+        top: pageHeight - item.transform[5] - item.height,
+        width: item.width
+      }));
+    
+    // Group by Y (raw y, bottom-up coords)
+    const lineMap = {};
+    for(const w of words){
+      const yKey = Math.round(w.y);
+      if(!lineMap[yKey]) lineMap[yKey] = [];
+      lineMap[yKey].push(w);
+    }
+    
+    // Sort top-down: in PDF, higher y = top of page
+    const sortedYs = Object.keys(lineMap).map(Number).sort((a,b) => b - a);
+    
+    for(const yKey of sortedYs){
+      allLines.push({
+        y: yKey,
+        words: lineMap[yKey].sort((a,b) => a.x0 - b.x0),
+        page: p
+      });
+    }
+  }
+  
+  let pjName = '';
+  let dateFrom = '';
+  let dateTo = '';
+  let totalQty = 0;
+  let totalKM = 0;
+  const items = [];
+  
+  // 1) Build full text for header parsing
+  const fullText = allLines.map(L => L.words.map(w => w.text).join(' ')).join('\n');
+  
+  // 2) PJ name
+  for(const L of allLines){
+    const text = L.words.map(w => w.text).join(' ');
+    if(text.includes('Poslovna jedinica')){
+      const m = text.match(/Poslovna\s+jedinica\s+(.+?)(?:\s+Od\s+kupca|\s+Za\s+|\s+Do\s+|$)/);
+      if(m){
+        pjName = m[1].trim();
+        break;
+      }
+    }
+  }
+  if(!pjName){
+    for(const L of allLines){
+      for(let i = 0; i < L.words.length; i++){
+        if(L.words[i].text === 'jedinica' && i+1 < L.words.length){
+          const next = [];
+          for(let j = i+1; j < Math.min(i+5, L.words.length); j++){
+            const t = L.words[j].text;
+            if(['Od','Do','Za',':',''].includes(t)) break;
+            next.push(t);
+          }
+          if(next.length){
+            pjName = next.join(' ').trim();
+            break;
+          }
+        }
+      }
+      if(pjName) break;
+    }
+  }
+  
+  // 3) Tarih
+  let m = fullText.match(/Od\s+datuma\s*:?\s*(\d+\/\d+\/\d+)/);
+  if(m) dateFrom = parseDateEU(m[1]);
+  m = fullText.match(/Do\s+datuma\s*:?\s*(\d+\/\d+\/\d+)/);
+  if(m) dateTo = parseDateEU(m[1]);
+  
+  if(!dateFrom || !dateTo){
+    const allDates = [...fullText.matchAll(/\b(\d{1,2}\/\d{1,2}\/\d{4})\b/g)].map(x => x[1]);
+    if(allDates.length >= 2){
+      if(!dateFrom) dateFrom = parseDateEU(allDates[0]);
+      if(!dateTo) dateTo = parseDateEU(allDates[1]);
+    }
+  }
+  
+  // 4) Ukupno Izlazi - PDF formats vary:
+  //    Format A: "Ukupno Izlazi 566,00 3.377,36" (qty + KM)
+  //    Format B: "Ukupno Izlazi 3.743,92" (only KM, no qty)
+  //    pdf.js may merge "UkupnoIzlazi"
+  
+  let totalSource = 'none';
+  
+  // Try format with TWO numbers first (qty + KM)
+  m = fullText.match(/Ukupno\s*Izlazi\s+([\d.,]+)\s+([\d.,]+)\b/);
+  if(!m) m = fullText.match(/UkupnoIzlazi\s+([\d.,]+)\s+([\d.,]+)\b/);
+  if(m){
+    // SANITY CHECK: if first number is way bigger than second, it's likely
+    // the "Ukupan iznos izlaza ... 0,02 3,743.92" pattern - skip it
+    const n1 = parseEUNum(m[1]);
+    const n2 = parseEUNum(m[2]);
+    // qty should be LOWER than KM (avg item ~ 5 KM)
+    // If first is 10x smaller than second, it's a header summary - skip
+    if(n1 < n2 * 0.5 || n1 > 100000){
+      // Looks like wrong match - try single-number format
+      m = null;
+    } else {
+      totalQty = n1;
+      totalKM = n2;
+      totalSource = 'format-A (qty+KM)';
+    }
+  }
+  
+  if(!m){
+    // Try format with ONE number (only KM)
+    m = fullText.match(/Ukupno\s*Izlazi\s+([\d.,]+)/);
+    if(!m) m = fullText.match(/UkupnoIzlazi\s+([\d.,]+)/);
+    if(m){
+      totalKM = parseEUNum(m[1]);
+      totalSource = 'format-B (KM only)';
+      // totalQty stays 0 — will be calculated from items
+    }
+  }
+  
+  // Fallback: "Ukupno : 566,00 3.377,36" or "Ukupno : 3.743,92"
+  if(totalKM === 0){
+    m = fullText.match(/Ukupno\s*:\s+([\d.,]+)\s+([\d.,]+)(?:\s|$)/);
+    if(m){
+      const n1 = parseEUNum(m[1]);
+      const n2 = parseEUNum(m[2]);
+      if(n1 >= n2 * 0.5){
+        totalQty = n1;
+        totalKM = n2;
+        totalSource = 'fallback "Ukupno: qty KM"';
+      } else {
+        m = null;
+      }
+    }
+    if(!m){
+      m = fullText.match(/Ukupno\s*:\s+([\d.,]+)/);
+      if(m){
+        totalKM = parseEUNum(m[1]);
+        totalSource = 'fallback "Ukupno: KM"';
+      }
+    }
+  }
+  
+  // Fallback: "Izlazi : ..." (avoid matching "Ukupan iznos izlaza za zadate uslove")
+  if(totalKM === 0){
+    m = fullText.match(/(?:^|\s)Izlazi\s*:\s+([\d.,]+)\s+([\d.,]+)/);
+    if(m){
+      const n1 = parseEUNum(m[1]);
+      const n2 = parseEUNum(m[2]);
+      if(n1 >= n2 * 0.5){
+        totalQty = n1;
+        totalKM = n2;
+        totalSource = 'fallback "Izlazi: qty KM"';
+      } else {
+        m = null;
+      }
+    }
+    if(!m){
+      m = fullText.match(/(?:^|\s)Izlazi\s*:\s+([\d.,]+)/);
+      if(m){
+        totalKM = parseEUNum(m[1]);
+        totalSource = 'fallback "Izlazi: KM"';
+      }
+    }
+  }
+  
+  console.log(`[Promet parser] Total source: ${totalSource}, totalQty=${totalQty}, totalKM=${totalKM}`);
+  
+  // 5) Item rows
+  let _debugTried = 0;
+  let _debugMatched = 0;
+  for(const L of allLines){
+    let komWord = null, qtyWord = null, iznosWord = null;
+    let leftWord = null;     // first item on left (may have barcode + naziv merged)
+    let katBrojWord = null;  // kat broj at x≈246
+    let hasKomCandidate = false;
+    
+    for(const w of L.words){
+      const x = w.x0;
+      const t = w.text;
+      
+      if(t === 'KOM') hasKomCandidate = true;
+      
+      // Left side text item (barcode and/or naziv start)
+      if(x < 110 && !leftWord){
+        leftWord = w;
+      }
+      // Kat broj area (around x=246)
+      else if(x > 240 && x < 320 && /^[A-Z0-9][\w\-\.]*$/.test(t) && t.length >= 3){
+        katBrojWord = w;
+      }
+      // KOM unit
+      else if(t === 'KOM' && x > 460 && x < 500){
+        komWord = w;
+      }
+      // Količina (number BEFORE KOM)
+      else if(/^[\d.,]+$/.test(t) && x > 440 && x < 480){
+        qtyWord = w;
+      }
+      // Iznos (rightmost)
+      else if(/^[\d.,]+$/.test(t) && x > 510){
+        iznosWord = w;
+      }
+    }
+    
+    if(hasKomCandidate) _debugTried++;
+    
+    if(komWord && qtyWord && iznosWord){
+      if(qtyWord.x0 >= komWord.x0) continue;
+      
+      const qty = parseEUNum(qtyWord.text);
+      const iznos = parseEUNum(iznosWord.text);
+      
+      if(qty <= 0 || iznos <= 0) continue;
+      
+      // Extract barcode and naziv from leftWord
+      let barcode = '';
+      let name = '';
+      
+      if(leftWord){
+        const t = leftWord.text;
+        // Try to extract 13-digit barcode at start
+        const barcodeMatch = t.match(/^(\d{13})\b\s*(.*)$/);
+        if(barcodeMatch){
+          barcode = barcodeMatch[1];
+          name = barcodeMatch[2].trim();
+        } else {
+          // No barcode - might be just šifra (like "520") followed by naziv
+          // or just naziv if pdf.js split differently
+          name = t;
+        }
+      }
+      
+      // Also check: is there a separate naziv text item between leftWord and katBroj?
+      // (pdf.js might split barcode and naziv apart)
+      if(!name || name.length < 3){
+        const moreNameParts = [];
+        for(const w of L.words){
+          if(w === leftWord) continue;
+          // Naziv range: x = 105-240
+          if(w.x0 > 100 && w.x0 < 245){
+            // Skip kat broj (uppercase pattern)
+            if(/^[A-Z0-9][\w\-\.]*$/.test(w.text) && /-/.test(w.text)) continue;
+            moreNameParts.push(w.text);
+          }
+        }
+        if(moreNameParts.length){
+          name = (name + ' ' + moreNameParts.join(' ')).trim();
+        }
+      }
+      
+      // Naziv temizliği — kat broj suffix'leri sil
+      if(name){
+        name = name.replace(/\s+[A-Z]{1,3}-[A-Z0-9]{2,5}-[\w-]+$/, '').trim();
+        name = name.replace(/[A-Z]-[A-Z]{2,4}-[\w-]+$/, '').trim();
+        name = name.replace(/[A-Z]{1,3}[A-Z0-9]{2,5}-\d+-\d+$/, '').trim();
+        name = name.replace(/\s+[A-Z]{1,2}$/, '').trim();
+      }
+      
+      _debugMatched++;
+      items.push({ barcode, name, qty, iznos });
+    }
+  }
+  
+  console.log(`[Promet parser] Pages: ${pdf.numPages}, Lines: ${allLines.length}, KOM lines: ${_debugTried}, Matched items: ${_debugMatched}`);
+  if(items.length > 0){
+    console.log('[Promet parser] First item:', items[0]);
+    console.log('[Promet parser] Item 50:', items[49] || items[items.length-1]);
+  }
+  if(allLines.length > 50){
+    console.log('[Promet parser] Sample line 50:', allLines[50].words.map(w => `[${w.x0.toFixed(0)}]${w.text}`).join(' '));
+  }
+  
+  return { pjName, dateFrom, dateTo, totalQty, totalKM, items };
+}
+
+// ============== Sanity check ==============
+function checkStatus(data){
+  const warnings = [];
+  
+  if(!data.pjName) warnings.push('PJ nije pronađen');
+  if(!data.dateFrom || !data.dateTo) warnings.push('Datum nije pronađen');
+  
+  if(data.items.length === 0){
+    return { level: 'error', msg: 'Nije pronađen nijedan proizvod', warnings };
+  }
+  
+  const calcQty = data.items.reduce((s,i) => s + i.qty, 0);
+  const calcKM = data.items.reduce((s,i) => s + i.iznos, 0);
+  
+  // If PDF didn't provide totalQty, fill it in from calculated
+  // (some PDF formats only show total KM, not qty)
+  if(data.totalQty === 0 && calcQty > 0){
+    data.totalQty = calcQty;
+  }
+  // Same for totalKM
+  if(data.totalKM === 0 && calcKM > 0){
+    data.totalKM = calcKM;
+  }
+  
+  if(data.totalQty === 0 && data.totalKM === 0){
+    warnings.push('PDF total nije pronađen');
+  }
+  
+  const qtyDiff = Math.abs(calcQty - data.totalQty);
+  const kmDiff = Math.abs(calcKM - data.totalKM);
+  
+  // Only warn if mismatch is significant
+  if(data.totalKM > 0 && kmDiff > 5){
+    warnings.push(`Totali se ne poklapaju (razlika: ${qtyDiff.toFixed(0)} kom / ${kmDiff.toFixed(2)} KM)`);
+  }
+  
+  if(warnings.length){
+    return { level: 'warn', msg: warnings.join(' · '), warnings, calcQty, calcKM, qtyDiff, kmDiff };
+  }
+  return { level: 'ok', msg: 'OK', calcQty, calcKM, qtyDiff, kmDiff };
+}
+
+// ============== Build CSV (2 sections) ==============
+function buildCSV(data){
+  let csv = 'PJ;Datum_od;Datum_do;Ukupno_kom;Ukupno_KM\n';
+  csv += `${data.pjName};${data.dateFrom};${data.dateTo};${fmtCSVNum(data.totalQty)};${fmtCSVNum(data.totalKM)}\n`;
+  csv += '\n';
+  csv += 'Barkod;Naziv;Kolicina;Iznos\n';
+  for(const it of data.items){
+    const name = (it.name || '').replace(/;/g, ',');
+    csv += `${it.barcode};${name};${fmtCSVNum(it.qty)};${fmtCSVNum(it.iznos)}\n`;
+  }
+  return csv;
+}
+
+// ============== Render ==============
+function renderResults(){
+  $('results').style.display = 'block';
+  
+  // Aggregate stats
+  let totalItems = 0, totalQty = 0, totalKM = 0;
+  const okPDFs = parsedPDFs.filter(p => p.data);
+  for(const p of okPDFs){
+    totalItems += p.data.items.length;
+    totalQty += p.data.totalQty;
+    totalKM += p.data.totalKM;
+  }
+  
+  $('statPJ').textContent = okPDFs.length;
+  $('statItems').textContent = totalItems;
+  $('statQty').textContent = totalQty.toFixed(0);
+  $('statKM').textContent = fmtNum(totalKM);
+  
+  // Render PJ cards
+  $('pjList').innerHTML = parsedPDFs.map((p, idx) => renderPJCard(p, idx)).join('');
+}
+
+function renderPJCard(p, idx){
+  const s = p.status;
+  const cardClass = s.level === 'error' ? 'error' : (s.level === 'warn' ? 'warn' : '');
+  const statusClass = s.level === 'error' ? 'error' : (s.level === 'warn' ? 'warn' : 'ok');
+  const statusText = s.level === 'error' ? '✗ Greška' : (s.level === 'warn' ? '⚠ Upozorenje' : '✓ OK');
+  
+  if(!p.data){
+    return `
+      <div class="pj-card ${cardClass}">
+        <div class="pj-head">
+          <div class="pj-info">
+            <div class="pj-title">📄 ${escapeHtml(p.filename)}</div>
+            <div class="pj-meta" style="color:#fca5a5">${escapeHtml(s.msg)}</div>
+          </div>
+          <span class="pj-status ${statusClass}">${statusText}</span>
+        </div>
+      </div>
+    `;
+  }
+  
+  const d = p.data;
+  return `
+    <div class="pj-card ${cardClass}">
+      <div class="pj-head" onclick="togglePJ(${idx})">
+        <div class="pj-info">
+          <div class="pj-title">
+            🏪 ${escapeHtml(d.pjName || '? Nepoznata PJ')} 
+            <span class="pj-status ${statusClass}">${statusText}</span>
+          </div>
+          <div class="pj-meta">
+            📄 ${escapeHtml(p.filename)} · 
+            📅 <strong>${d.dateFrom || '?'}</strong> → <strong>${d.dateTo || '?'}</strong> · 
+            📦 <strong>${d.items.length}</strong> proizvoda
+          </div>
+        </div>
+        <div class="pj-totals">
+          <div class="pj-total-item">
+            <span class="pj-total-label">Komada</span>
+            <span class="pj-total-val">${d.totalQty.toFixed(0)}</span>
+          </div>
+          <div class="pj-total-item">
+            <span class="pj-total-label">Iznos KM</span>
+            <span class="pj-total-val gold">${fmtNum(d.totalKM)}</span>
+          </div>
+        </div>
+      </div>
+      <div class="pj-body" id="pjBody${idx}">
+        ${s.warnings && s.warnings.length ? `
+          <div style="padding:10px 18px;background:rgba(255,165,0,0.08);font-size:11px;color:#fbbf24;border-bottom:1px solid rgba(255,165,0,0.2)">
+            ⚠ ${s.warnings.map(escapeHtml).join(' · ')}
+            ${s.calcQty !== undefined ? `<br><span style="color:#999">Hesaplanan: ${s.calcQty.toFixed(0)} kom / ${fmtNum(s.calcKM)} KM</span>` : ''}
+          </div>
+        ` : ''}
+        <div class="pj-toolbar">
+          <div class="pj-toolbar-info">
+            ${d.items.length} stavki ${s.calcQty !== undefined && s.qtyDiff < 1.5 ? '· ✓ totali OK' : ''}
+          </div>
+          <div class="pj-toolbar-actions">
+            <button class="btn-mini primary" onclick="downloadOne(${idx})">💾 CSV</button>
+            <button class="btn-mini" onclick="copyOne(${idx})">📋 Kopiraj</button>
+          </div>
+        </div>
+        <div class="pj-table">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:120px">Barkod</th>
+                <th>Naziv</th>
+                <th class="num" style="width:80px">Količina</th>
+                <th class="num" style="width:110px">Iznos KM</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${d.items.map(it => `
+                <tr>
+                  <td><span class="barcode">${it.barcode || '—'}</span></td>
+                  <td>${escapeHtml(it.name || '')}</td>
+                  <td class="num"><span class="qty">${it.qty.toFixed(0)}</span></td>
+                  <td class="num"><span class="iznos">${fmtNum(it.iznos)}</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+window.togglePJ = function(idx){
+  const body = $(`pjBody${idx}`);
+  body.classList.toggle('open');
+};
+
+window.downloadOne = function(idx){
+  const p = parsedPDFs[idx];
+  if(!p.csv) return;
+  const blob = new Blob(['\ufeff' + p.csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = p.filename.replace(/\.pdf$/i, '.csv');
+  a.click();
+  URL.revokeObjectURL(url);
+  showStatus('💾 CSV preuzet: ' + a.download, 'success');
+  event.stopPropagation();
+};
+
+window.copyOne = async function(idx){
+  const p = parsedPDFs[idx];
+  if(!p.csv) return;
+  try {
+    await navigator.clipboard.writeText(p.csv);
+    showStatus('📋 CSV kopiran u clipboard', 'success');
+  } catch(e) {
+    showStatus('❌ Kopiranje nije moguće', 'error');
+  }
+  event.stopPropagation();
+};
+
+// ============== Buttons ==============
+$('btnDownloadAll').addEventListener('click', async () => {
+  const okPDFs = parsedPDFs.filter(p => p.csv);
+  if(okPDFs.length === 0){
+    showStatus('❌ Nema CSV fajlova za preuzimanje', 'error');
+    return;
+  }
+  
+  if(okPDFs.length === 1){
+    // Single file, download directly
+    const p = okPDFs[0];
+    const blob = new Blob(['\ufeff' + p.csv], {type:'text/csv;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = p.filename.replace(/\.pdf$/i, '.csv');
+    a.click();
+    URL.revokeObjectURL(url);
+    showStatus('💾 CSV preuzet', 'success');
+    return;
+  }
+  
+  // Multiple: ZIP
+  const zip = new JSZip();
+  for(const p of okPDFs){
+    const csvName = p.filename.replace(/\.pdf$/i, '.csv');
+    zip.file(csvName, '\ufeff' + p.csv);
+  }
+  const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  const blob = await zip.generateAsync({type:'blob'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `promet_mp_${today}.zip`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showStatus(`💾 ZIP sa <strong>${okPDFs.length}</strong> CSV-a preuzet`, 'success');
+});
+
+$('btnReset').addEventListener('click', () => {
+  parsedPDFs = [];
+  $('results').style.display = 'none';
+  $('empty').style.display = 'block';
+  $('status').classList.remove('show');
+  dz.classList.remove('has-file');
+  dz.querySelector('.text').textContent = 'Povuci PDF(ove) ovdje ili klikni za odabir';
+  dz.querySelector('.sub').innerHTML = 'Format: <code>"Pregled izlaza po kupcima"</code>';
+  fi.value = '';
+});
+</script>
+</body>
+</html>
