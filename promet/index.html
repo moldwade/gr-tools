@@ -182,9 +182,9 @@
 </style>
 </head>
 <body>
-
+ 
 <div class="container">
-
+ 
   <header>
     <img src="../gr-logo.png" alt="GR" />
     <div class="header-text">
@@ -193,7 +193,7 @@
     </div>
     <a href="/" class="back-link">← Tools</a>
   </header>
-
+ 
   <!-- Drop zone -->
   <label class="dropzone" id="dropzone">
     <span class="icon">🛒</span>
@@ -202,16 +202,16 @@
     <div class="multi-hint">📦 Više PDF-ova odjednom — sve MP filijale u batch</div>
     <input type="file" id="fileInput" accept=".pdf,application/pdf" multiple />
   </label>
-
+ 
   <!-- Status -->
   <div class="status" id="status"></div>
-
+ 
   <!-- Loader -->
   <div class="loader" id="loader">
     <div class="spinner"></div>
     <div style="color:#bbb;font-size:13px" id="loaderText">Obrađujem PDF...</div>
   </div>
-
+ 
   <!-- Results -->
   <div id="results" style="display:none">
     
@@ -233,7 +233,7 @@
         <div class="stat-value gold" id="statKM">0.00</div>
       </div>
     </div>
-
+ 
     <div class="actions">
       <button class="btn btn-primary" id="btnDownloadAll">
         💾 Preuzmi sve (ZIP)
@@ -242,24 +242,24 @@
         🔄 Novi PDF-ovi
       </button>
     </div>
-
+ 
     <div class="pj-list" id="pjList"></div>
   </div>
-
+ 
   <!-- Empty state -->
   <div class="empty" id="empty">
     <span class="icon">📂</span>
     <div>Učitaj PDF(ove) da počneš</div>
   </div>
-
+ 
 </div>
-
+ 
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
+ 
 const $ = id => document.getElementById(id);
 let parsedPDFs = [];  // [{filename, data, csv, status}]
-
+ 
 function showStatus(msg, type){
   const s = $('status');
   s.className = 'status show ' + type;
@@ -296,11 +296,11 @@ function escapeHtml(s){
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
   }[c]));
 }
-
+ 
 // ============== Drop Zone ==============
 const dz = $('dropzone');
 const fi = $('fileInput');
-
+ 
 dz.addEventListener('dragover', e => {
   e.preventDefault();
   dz.classList.add('drag');
@@ -314,7 +314,7 @@ dz.addEventListener('drop', e => {
 fi.addEventListener('change', e => {
   if(e.target.files.length) handleFiles(e.target.files);
 });
-
+ 
 // ============== File Handler — multi-file batch ==============
 async function handleFiles(fileList){
   const files = Array.from(fileList).filter(f => f.name.toLowerCase().endsWith('.pdf'));
@@ -376,7 +376,7 @@ async function handleFiles(fileList){
   if(errCount) msg += ` · <span style="color:#fca5a5">${errCount} grešaka</span>`;
   showStatus(msg, errCount > 0 ? 'warn' : 'success');
 }
-
+ 
 // ============== PDF Parser (mirroring Python promet_u_csv.py) ==============
 async function parsePDF(buffer){
   const pdf = await pdfjsLib.getDocument({data: buffer}).promise;
@@ -478,27 +478,39 @@ async function parsePDF(buffer){
   // 4) Ukupno Izlazi - PDF formats vary:
   //    Format A: "Ukupno Izlazi 566,00 3.377,36" (qty + KM)
   //    Format B: "Ukupno Izlazi 3.743,92" (only KM, no qty)
+  //    Trap:    "Ukupan iznos izlaza ... : 0,02 3,743.92" - DON'T match this
   //    pdf.js may merge "UkupnoIzlazi"
   
   let totalSource = 'none';
+  
+  // Helper: check if (n1, n2) looks like valid (qty, KM) pair
+  // qty: positive integer-ish, < 50000
+  // KM:  positive, > qty (avg item price > 1 KM)
+  // KM:  > qty * 0.5 (otherwise it's "0,02 3743.92" trap)
+  function looksLikeQtyKM(n1, n2){
+    if(n1 <= 0 || n2 <= 0) return false;
+    // qty should be reasonable: between 1 and 100000
+    if(n1 < 1 || n1 > 100000) return false;
+    // KM should be at least half of qty (assumes avg item price >= 0.5 KM)
+    // This rejects "0,02 3743.92" (n1=0.02, way smaller than n2)
+    if(n2 < n1 * 0.3) return false;
+    // qty should not be wildly larger than KM either (qty=3744, KM=0.02 case)
+    if(n1 > n2 * 100) return false;
+    return true;
+  }
   
   // Try format with TWO numbers first (qty + KM)
   m = fullText.match(/Ukupno\s*Izlazi\s+([\d.,]+)\s+([\d.,]+)\b/);
   if(!m) m = fullText.match(/UkupnoIzlazi\s+([\d.,]+)\s+([\d.,]+)\b/);
   if(m){
-    // SANITY CHECK: if first number is way bigger than second, it's likely
-    // the "Ukupan iznos izlaza ... 0,02 3,743.92" pattern - skip it
     const n1 = parseEUNum(m[1]);
     const n2 = parseEUNum(m[2]);
-    // qty should be LOWER than KM (avg item ~ 5 KM)
-    // If first is 10x smaller than second, it's a header summary - skip
-    if(n1 < n2 * 0.5 || n1 > 100000){
-      // Looks like wrong match - try single-number format
-      m = null;
-    } else {
+    if(looksLikeQtyKM(n1, n2)){
       totalQty = n1;
       totalKM = n2;
       totalSource = 'format-A (qty+KM)';
+    } else {
+      m = null; // Reject - try single-number format
     }
   }
   
@@ -519,7 +531,7 @@ async function parsePDF(buffer){
     if(m){
       const n1 = parseEUNum(m[1]);
       const n2 = parseEUNum(m[2]);
-      if(n1 >= n2 * 0.5){
+      if(looksLikeQtyKM(n1, n2)){
         totalQty = n1;
         totalKM = n2;
         totalSource = 'fallback "Ukupno: qty KM"';
@@ -542,7 +554,7 @@ async function parsePDF(buffer){
     if(m){
       const n1 = parseEUNum(m[1]);
       const n2 = parseEUNum(m[2]);
-      if(n1 >= n2 * 0.5){
+      if(looksLikeQtyKM(n1, n2)){
         totalQty = n1;
         totalKM = n2;
         totalSource = 'fallback "Izlazi: qty KM"';
@@ -668,7 +680,7 @@ async function parsePDF(buffer){
   
   return { pjName, dateFrom, dateTo, totalQty, totalKM, items };
 }
-
+ 
 // ============== Sanity check ==============
 function checkStatus(data){
   const warnings = [];
@@ -710,7 +722,7 @@ function checkStatus(data){
   }
   return { level: 'ok', msg: 'OK', calcQty, calcKM, qtyDiff, kmDiff };
 }
-
+ 
 // ============== Build CSV (2 sections) ==============
 function buildCSV(data){
   let csv = 'PJ;Datum_od;Datum_do;Ukupno_kom;Ukupno_KM\n';
@@ -723,7 +735,7 @@ function buildCSV(data){
   }
   return csv;
 }
-
+ 
 // ============== Render ==============
 function renderResults(){
   $('results').style.display = 'block';
@@ -745,7 +757,7 @@ function renderResults(){
   // Render PJ cards
   $('pjList').innerHTML = parsedPDFs.map((p, idx) => renderPJCard(p, idx)).join('');
 }
-
+ 
 function renderPJCard(p, idx){
   const s = p.status;
   const cardClass = s.level === 'error' ? 'error' : (s.level === 'warn' ? 'warn' : '');
@@ -834,12 +846,12 @@ function renderPJCard(p, idx){
     </div>
   `;
 }
-
+ 
 window.togglePJ = function(idx){
   const body = $(`pjBody${idx}`);
   body.classList.toggle('open');
 };
-
+ 
 window.downloadOne = function(idx){
   const p = parsedPDFs[idx];
   if(!p.csv) return;
@@ -853,7 +865,7 @@ window.downloadOne = function(idx){
   showStatus('💾 CSV preuzet: ' + a.download, 'success');
   event.stopPropagation();
 };
-
+ 
 window.copyOne = async function(idx){
   const p = parsedPDFs[idx];
   if(!p.csv) return;
@@ -865,7 +877,7 @@ window.copyOne = async function(idx){
   }
   event.stopPropagation();
 };
-
+ 
 // ============== Buttons ==============
 $('btnDownloadAll').addEventListener('click', async () => {
   const okPDFs = parsedPDFs.filter(p => p.csv);
@@ -904,7 +916,7 @@ $('btnDownloadAll').addEventListener('click', async () => {
   URL.revokeObjectURL(url);
   showStatus(`💾 ZIP sa <strong>${okPDFs.length}</strong> CSV-a preuzet`, 'success');
 });
-
+ 
 $('btnReset').addEventListener('click', () => {
   parsedPDFs = [];
   $('results').style.display = 'none';
