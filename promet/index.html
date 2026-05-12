@@ -74,6 +74,8 @@
   }
   .btn-primary{background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff}
   .btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(124,58,237,0.4)}
+  .btn-b2b{background:linear-gradient(135deg,#a78bfa,#7c3aed);color:#fff}
+  .btn-b2b:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(167,139,250,0.5)}
   .btn-secondary{background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)}
   .btn-secondary:hover{background:rgba(255,255,255,0.1)}
   .btn:disabled{opacity:0.4;cursor:not-allowed}
@@ -116,7 +118,7 @@
     padding:10px 18px;gap:8px;flex-wrap:wrap;border-bottom:1px solid rgba(255,255,255,0.05);
   }
   .pj-toolbar-info{font-size:11px;color:#888}
-  .pj-toolbar-actions{display:flex;gap:6px}
+  .pj-toolbar-actions{display:flex;gap:6px;flex-wrap:wrap}
   .btn-mini{
     padding:5px 11px;border:none;border-radius:7px;cursor:pointer;
     font-size:11px;font-weight:600;font-family:inherit;
@@ -125,6 +127,8 @@
   }
   .btn-mini:hover{background:rgba(255,255,255,0.12)}
   .btn-mini.primary{background:rgba(124,58,237,0.2);color:#c4b5fd;border-color:rgba(124,58,237,0.35)}
+  .btn-mini.b2b{background:linear-gradient(135deg,rgba(167,139,250,0.25),rgba(124,58,237,0.25));color:#c4b5fd;border-color:rgba(167,139,250,0.4)}
+  .btn-mini.b2b:hover{background:linear-gradient(135deg,rgba(167,139,250,0.4),rgba(124,58,237,0.4))}
   
   .pj-table{max-height:340px;overflow:auto}
   table{width:100%;border-collapse:collapse;font-size:12px}
@@ -816,8 +820,9 @@ function renderPJCard(p, idx){
             ${d.items.length} stavki ${s.calcQty !== undefined && s.qtyDiff < 1.5 ? '· ✓ totali OK' : ''}
           </div>
           <div class="pj-toolbar-actions">
-            <button class="btn-mini primary" onclick="downloadOne(${idx})">💾 CSV</button>
-            <button class="btn-mini" onclick="copyOne(${idx})">📋 Kopiraj</button>
+            <button class="btn-mini b2b" onclick="sendOneToB2B(${idx}, event)">📤 Pošalji u B2B</button>
+            <button class="btn-mini primary" onclick="downloadOne(${idx}, event)">💾 CSV</button>
+            <button class="btn-mini" onclick="copyOne(${idx}, event)">📋 Kopiraj</button>
           </div>
         </div>
         <div class="pj-table">
@@ -852,7 +857,8 @@ window.togglePJ = function(idx){
   body.classList.toggle('open');
 };
  
-window.downloadOne = function(idx){
+window.downloadOne = function(idx, evt){
+  if(evt) evt.stopPropagation();
   const p = parsedPDFs[idx];
   if(!p.csv) return;
   const blob = new Blob(['\ufeff' + p.csv], {type:'text/csv;charset=utf-8'});
@@ -863,10 +869,10 @@ window.downloadOne = function(idx){
   a.click();
   URL.revokeObjectURL(url);
   showStatus('💾 CSV preuzet: ' + a.download, 'success');
-  event.stopPropagation();
 };
  
-window.copyOne = async function(idx){
+window.copyOne = async function(idx, evt){
+  if(evt) evt.stopPropagation();
   const p = parsedPDFs[idx];
   if(!p.csv) return;
   try {
@@ -875,7 +881,38 @@ window.copyOne = async function(idx){
   } catch(e) {
     showStatus('❌ Kopiranje nije moguće', 'error');
   }
-  event.stopPropagation();
+};
+
+// 📤 Pošalji JEDAN promet u B2B (per-PJ) — preko URL hash + base64
+window.sendOneToB2B = function(idx, evt){
+  if(evt) evt.stopPropagation();
+  const p = parsedPDFs[idx];
+  if(!p || !p.csv){
+    showStatus('❌ Nema CSV podataka za slanje', 'error');
+    return;
+  }
+  if(p.status && p.status.level === 'error'){
+    showStatus('❌ Ovaj PDF ima grešku, ne može biti poslat', 'error');
+    return;
+  }
+  
+  try {
+    // Compress + encode CSV in base64 (UTF-8 safe)
+    const encoded = btoa(unescape(encodeURIComponent(p.csv)));
+    
+    // Browser URL limits ~2M chars; per-PJ promet should be ≪ that
+    if(encoded.length > 1500000){
+      showStatus('⚠️ CSV je prevelik za direktan transfer. Koristite "Kopiraj" i ručno zaljepite u B2B.', 'warn');
+      return;
+    }
+    
+    const b2bUrl = 'https://b2b.goldenrose.ba/#import=promet&data=' + encoded;
+    showStatus(`📤 Otvaram B2B sistem za <strong>${escapeHtml(p.data.pjName||'PJ')}</strong>... Prijavite se ako niste već.`, 'info');
+    window.open(b2bUrl, '_blank');
+  } catch(e) {
+    console.error(e);
+    showStatus('❌ Greška pri pripremi za slanje: ' + e.message, 'error');
+  }
 };
  
 // ============== Buttons ==============
