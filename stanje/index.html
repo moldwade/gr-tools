@@ -214,6 +214,9 @@
       <button class="btn btn-primary" id="btnDownload">
         💾 Preuzmi CSV
       </button>
+      <button class="btn" id="btnSendB2B" style="background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff">
+        📤 Pošalji u B2B
+      </button>
       <button class="btn btn-secondary" id="btnCopy">
         📋 Kopiraj CSV
       </button>
@@ -606,6 +609,30 @@ $('btnCopy').addEventListener('click', async () => {
     showStatus('📋 CSV kopiran u clipboard', 'success');
   } catch(e) {
     showStatus('❌ Kopiranje nije moguće: ' + e.message, 'error');
+  }
+});
+
+// 📤 Send to B2B
+$('btnSendB2B').addEventListener('click', () => {
+  if(!csvContent){
+    showStatus('❌ Nema CSV podataka za slanje', 'error');
+    return;
+  }
+  
+  try {
+    const encoded = btoa(unescape(encodeURIComponent(csvContent)));
+    
+    if(encoded.length > 1500000){
+      showStatus('⚠️ CSV je prevelik za direktan transfer. Koristite "Kopiraj" i ručno zaljepite u B2B.', 'warn');
+      return;
+    }
+    
+    const b2bUrl = 'https://b2b.goldenrose.ba/#import=stanje&data=' + encoded;
+    showStatus('📤 Otvaram B2B sistem... Prijavite se ako niste već.', 'info');
+    window.open(b2bUrl, '_blank');
+  } catch(e) {
+    console.error(e);
+    showStatus('❌ Greška pri pripremi za slanje: ' + e.message, 'error');
   }
 });
 
