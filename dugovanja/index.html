@@ -361,7 +361,8 @@ async function extractTextFromPDF(buffer){
 function parseDugovanja(text){
   const rows = [];
   const skipPatterns = [
-    /Golden Rose/i,
+    // Samo header: "Golden Rose" d.o.o. (sa navodnicima ili počinje liniju)
+    /^["']?Golden Rose["']?\s+d\.o\.o\./i,
     /Poslovni objekat/i,
     /Brčko Distrikt/i,
     /Kupac\s+Datum/i,
