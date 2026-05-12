@@ -370,16 +370,27 @@ function parseDugovanja(text){
     /Datum:/i
   ];
   
+  let _debugLines = 0;
+  let _debugMatched = 0;
+  let _debugSkipped = [];
+  
   for(let line of text.split('\n')){
     line = line.trim().replace(/\s+/g, ' ');
     if(!line) continue;
+    _debugLines++;
     
     // Skip header/footer
     if(skipPatterns.some(p => p.test(line))) continue;
     
     // Match: "317 BINGO D.O.O 38,848.76" or "317 BINGO D.O.O 38.848,76"
     const m = line.match(/^(\d+)\s+(.+?)\s+([\d,\.]+)\s*$/);
-    if(!m) continue;
+    if(!m){
+      // Lines starting with digit but didn't match - might be missing
+      if(/^\d/.test(line) && _debugSkipped.length < 30){
+        _debugSkipped.push({reason: 'no regex match', line});
+      }
+      continue;
+    }
     
     const broj = m[1].trim();
     const naziv = m[2].trim();
@@ -388,29 +399,38 @@ function parseDugovanja(text){
     // Normalize: handle both EU "38.848,76" and US "38,848.76" formats
     let saldo;
     if(saldoStr.includes(',') && saldoStr.includes('.')){
-      // Determine which is decimal: last position wins
       const lastComma = saldoStr.lastIndexOf(',');
       const lastDot = saldoStr.lastIndexOf('.');
       if(lastDot > lastComma){
-        // US format: 38,848.76
         saldo = parseFloat(saldoStr.replace(/,/g, ''));
       } else {
-        // EU format: 38.848,76
         saldo = parseFloat(saldoStr.replace(/\./g, '').replace(',', '.'));
       }
     } else if(saldoStr.includes(',')){
-      // Only comma — likely decimal: "38,76"
       saldo = parseFloat(saldoStr.replace(',', '.'));
     } else {
       saldo = parseFloat(saldoStr);
     }
     
-    if(isNaN(saldo) || saldo <= 0) continue;
+    if(isNaN(saldo) || saldo <= 0){
+      if(_debugSkipped.length < 30) _debugSkipped.push({reason: 'saldo<=0 or NaN', line, broj, naziv, saldoStr});
+      continue;
+    }
     
     // Skip if naziv is too short or just numbers
-    if(naziv.length < 3 || /^\d+$/.test(naziv)) continue;
+    if(naziv.length < 3 || /^\d+$/.test(naziv)){
+      if(_debugSkipped.length < 30) _debugSkipped.push({reason: 'naziv too short', line, broj, naziv});
+      continue;
+    }
     
+    _debugMatched++;
     rows.push({partner_broj: broj, naziv, saldo});
+  }
+  
+  console.log(`[Dugovanja parser] Lines processed: ${_debugLines}, Matched: ${_debugMatched}, Skipped: ${_debugSkipped.length}`);
+  if(_debugSkipped.length > 0){
+    console.log('[Dugovanja parser] First skipped lines:');
+    _debugSkipped.slice(0, 15).forEach(s => console.log('  ', s.reason, '→', JSON.stringify(s)));
   }
   
   return rows;
