@@ -393,7 +393,9 @@ async function parsePDF(buffer){
     // Process rows top→bottom
     const sortedRows = Object.keys(rowMap).map(Number).sort((a,b) => a - b);
     
-    const skipFirstWords = ['Golden','Poslovni','Veleprodaja','Sifra','Šifra','Strana','Ukupno','(Cijena','Stanje','Naziv','Jed.m.','Kat.'];
+    // Header/footer detection: combine first 2-3 words to be specific
+    // Don't skip lone "Golden" - product name could start with it
+    const skipFirstWords = ['Poslovni','Veleprodaja','Sifra','Šifra','Strana','Ukupno','(Cijena','Stanje','Naziv','Jed.m.','Kat.'];
     
     for(const rowKey of sortedRows){
       const rowWords = rowMap[rowKey].sort((a,b) => a.x0 - b.x0);
@@ -404,6 +406,15 @@ async function parsePDF(buffer){
       
       // Skip header/footer rows
       if(skipFirstWords.includes(firstT)) continue;
+      
+      // Skip "Golden Rose" d.o.o. header line specifically
+      // Pattern: "Golden" followed by "Rose" (and optionally d.o.o.)
+      if(firstT === 'Golden' || firstT === '"Golden'){
+        const secondT = rowWords[1] ? rowWords[1].text : '';
+        if(secondT === 'Rose' || secondT === 'Rose"'){
+          continue; // It's the header
+        }
+      }
       
       let barkod = '';
       let sifra = '';
