@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="bs">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Ovjera Faktura — PDF→CSV · Golden Rose Tools</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;margin:0;padding:18px;background:#f6f7f9;color:#222;max-width:1000px;margin:0 auto}
+  h1{margin:0 0 6px;font-size:22px;color:#c8333a}
+  .sub{font-size:13px;color:#666;margin-bottom:18px;line-height:1.5}
+  .card{background:#fff;border:1px solid #e3e6ea;border-radius:10px;padding:14px 16px;margin-bottom:14px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .drop{border:2px dashed #c8333a;border-radius:10px;padding:30px 16px;text-align:center;background:#fff5f6;cursor:pointer;transition:.15s}
+  .drop.over{background:#ffe0e3;border-color:#a01f26;transform:scale(1.01)}
+  .drop h3{margin:0 0 6px;color:#c8333a;font-size:16px}
+  .drop p{margin:4px 0;font-size:12px;color:#555}
+  input[type=file]{display:none}
+  .btn{display:inline-block;padding:9px 16px;border-radius:7px;border:1px solid #c8333a;background:#c8333a;color:#fff;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;font-family:inherit}
+  .btn.ghost{background:#fff;color:#c8333a}
+  .btn.purple{background:#7c3aed;border-color:#7c3aed;color:#fff}
+  .btn.green{background:#1a8a4a;border-color:#1a8a4a;color:#fff}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .stat{background:#f0f4f9;border-radius:7px;padding:8px 12px;font-size:12px;color:#444}
+  .stat b{font-size:14px;color:#222;display:block}
+  table{width:100%;border-collapse:collapse;font-size:12px;background:#fff}
+  th,td{padding:6px 8px;border-bottom:1px solid #eef0f3;text-align:left}
+  th{background:#f7f8fa;font-weight:600;position:sticky;top:0;font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:#555}
+  tr:hover{background:#fafbfc}
+  .wrap{max-height:380px;overflow:auto;border:1px solid #e3e6ea;border-radius:7px}
+  .err{background:#ffe7ea;border:1px solid #c8333a;color:#7c1d22;padding:10px 12px;border-radius:7px;margin-bottom:10px;font-size:13px}
+  .ok{background:#e7f6ed;border:1px solid #1a8a4a;color:#0f5a32;padding:10px 12px;border-radius:7px;margin-bottom:10px;font-size:13px}
+  .info{background:#e8f0fa;border:1px solid #4a82c4;color:#1a4a82;padding:10px 12px;border-radius:7px;margin-bottom:10px;font-size:13px;line-height:1.5}
+  small{color:#777}
+  code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace}
+  a.home{color:#7c3aed;font-size:12px;text-decoration:none}
+  a.home:hover{text-decoration:underline}
+  .filename{font-size:11px;color:#666;background:#f0f0f0;padding:2px 7px;border-radius:4px;margin-left:6px}
+  details{margin-top:8px;font-size:12px}
+  details summary{cursor:pointer;color:#7c3aed;padding:4px 0}
+  details pre{background:#f7f8fa;padding:8px;border-radius:6px;font-size:11px;overflow:auto;max-height:200px}
+</style>
+</head>
+<body>
+
+<div style="margin-bottom:10px"><a class="home" href="/">← Tools · Golden Rose</a></div>
+<h1>📋 Ovjera Faktura — PDF→CSV</h1>
+<div class="sub">
+  Parsiraj PDF iz Sage-a (lista faktura po periodu, npr. <code>5/05/2026–12/05/2026</code>) i pošalji u B2B sistem za praćenje koje fakture su vraćene ovjerene (sa pečatom).
+</div>
+
+<div class="card">
+  <div class="drop" id="drop">
+    <h3>📄 Klikni ili prevuci PDF ovdje</h3>
+    <p>Podržava više PDF-ova odjednom — sve fakture se spajaju u jednu listu.</p>
+    <p>Tražimo redove oblika: <code>D/M/YYYY  broj  kupac  iznosi…</code></p>
+    <input type="file" id="fi" accept="application/pdf" multiple />
+  </div>
+</div>
+
+<div id="status"></div>
+
+<div class="card" id="resultCard" style="display:none">
+  <div class="row" style="margin-bottom:10px">
+    <div class="stat"><b id="sCnt">0</b>fakture</div>
+    <div class="stat"><b id="sRange">—</b>period</div>
+    <div class="stat"><b id="sMin">—</b>min broj</div>
+    <div class="stat"><b id="sMax">—</b>max broj</div>
+    <div class="stat"><b id="sKupci">0</b>jedinstvenih kupaca</div>
+    <div style="flex:1"></div>
+    <button class="btn purple" onclick="sendToB2B()">📤 Pošalji u B2B</button>
+    <button class="btn ghost" onclick="downloadCSV()">💾 CSV</button>
+  </div>
+
+  <div class="wrap">
+    <table>
+      <thead>
+        <tr><th style="width:90px">Datum</th><th style="width:60px">Broj</th><th>Kupac</th></tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <details>
+    <summary>📄 Sirovi sadržaj prvog PDF-a (debug)</summary>
+    <pre id="rawDump"></pre>
+  </details>
+</div>
+
+<!-- pdf.js library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  const B2B_URL = 'https://b2b.goldenrose.ba/';
+  const drop = document.getElementById('drop');
+  const fi   = document.getElementById('fi');
+  const status = document.getElementById('status');
+  let parsed = []; // {broj, god, datum, kupac, _source}
+
+  // ── DRAG & DROP ───────────────────────────────────────
+  drop.addEventListener('click', () => fi.click());
+  ['dragenter','dragover'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave','drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', ev => {
+    const files = [...ev.dataTransfer.files].filter(f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
+    if (files.length) handleFiles(files);
+  });
+  fi.addEventListener('change', () => {
+    if (fi.files.length) handleFiles([...fi.files]);
+    fi.value = '';
+  });
+
+  function setStatus(html){ status.innerHTML = html; }
+
+  // ── PDF PARSING ───────────────────────────────────────
+  // Pattern: "D/M/YYYY <broj> <kupac (može sadržavati razmake, navodnike)> <4 iznosa s decimalnim zarezom>"
+  // Primjeri:
+  //   5/05/2026 652 BINGO D.O.O 432,50 12,98 71,32 490,84
+  //   5/05/2026 655 STR"REFAN" IPP 1.177,50 211,95 164,14 1.129,69
+  //   12/05/2026 711 PZU APOTEKA "DUR-FARM" 191,80 28,77 27,72 190,75
+  const LINE_RE = /^\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d+)\s+(.+?)\s+([\d.]+,\d{2})\s+([\d.]+,\d{2})\s+([\d.]+,\d{2})\s+([\d.]+,\d{2})\s*$/;
+
+  // Linije koje treba ignorisati (totali, headeri, "Kasa - 0" za gotovinu)
+  const SKIP_RE = /^(Ukupno|Datum Račun|Skladište|Gotovina|Virman|Strana|"Golden Rose"|Poslovni objekat|Brčko Distrikt|\/ \/ Kasa)/i;
+
+  async function extractTextLines(file){
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+    const allLines = [];
+    for (let p = 1; p <= pdf.numPages; p++){
+      const page = await pdf.getPage(p);
+      const tc = await page.getTextContent();
+      // Grupiši iteme po y-koordinati (red)
+      const rows = {};
+      for (const it of tc.items){
+        if (!it.str) continue;
+        const y = Math.round(it.transform[5]); // y pozicija
+        if (!rows[y]) rows[y] = [];
+        rows[y].push({x: it.transform[4], s: it.str});
+      }
+      // Sortiraj redove odozgo prema dolje (veće y = gore u PDF koordinatama)
+      const ys = Object.keys(rows).map(Number).sort((a,b) => b - a);
+      for (const y of ys){
+        const parts = rows[y].sort((a,b) => a.x - b.x).map(p => p.s);
+        // Spoji s razmakom, ali kolaps višestrukih razmaka
+        const line = parts.join(' ').replace(/\s+/g, ' ').trim();
+        if (line) allLines.push(line);
+      }
+    }
+    return allLines;
+  }
+
+  async function handleFiles(files){
+    setStatus('<div class="info">⏳ Učitavanje i parsiranje PDF-a… ('+files.length+' fajl'+(files.length>1?'a':'')+')</div>');
+    const allRows = [];
+    let rawFirst = '';
+    const errors = [];
+
+    for (const file of files){
+      try {
+        const lines = await extractTextLines(file);
+        if (!rawFirst) rawFirst = lines.slice(0, 80).join('\n');
+        let matched = 0;
+        for (const line of lines){
+          if (SKIP_RE.test(line)) continue;
+          const m = LINE_RE.exec(line);
+          if (!m) continue;
+          const [, d, mn, y, broj, kupacRaw] = m;
+          const kupac = kupacRaw.replace(/\s+/g, ' ').trim();
+          // Filtriraj "Razni kupci" gotovinske
+          if (/^Razni kupci$/i.test(kupac)) continue;
+          allRows.push({
+            broj: parseInt(broj, 10),
+            god:  parseInt(y, 10),
+            datum: `${y}-${mn.padStart(2,'0')}-${d.padStart(2,'0')}`,
+            kupac,
+            _source: file.name
+          });
+          matched++;
+        }
+        if (matched === 0){
+          errors.push(`${file.name}: nije pronađena ni jedna faktura (provjeri format)`);
+        }
+      } catch(e){
+        console.error(e);
+        errors.push(`${file.name}: ${e.message}`);
+      }
+    }
+
+    // Deduplikacija unutar batch-a (isti god+broj)
+    const seen = new Set();
+    parsed = [];
+    for (const r of allRows){
+      const key = `${r.god}_${r.broj}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      parsed.push(r);
+    }
+    // Sortiraj po broju
+    parsed.sort((a,b) => a.god - b.god || a.broj - b.broj);
+
+    renderResult(rawFirst, errors);
+  }
+
+  function renderResult(rawFirst, errors){
+    if (parsed.length === 0){
+      let msg = '<div class="err">⚠ Nije pronađena ni jedna faktura u PDF-u.<br><small>Očekivani format reda: <code>D/M/YYYY  broj  kupac  iznos1  rabat  pdv  ukupno</code></small></div>';
+      if (errors.length) msg += '<div class="err">' + errors.map(e => '• '+e).join('<br>') + '</div>';
+      setStatus(msg);
+      document.getElementById('resultCard').style.display = 'none';
+      return;
+    }
+
+    // Stats
+    const brojevi = parsed.map(r => r.god*100000 + r.broj);
+    const minR = parsed[parsed.indexOf(parsed.find(r => r.god*100000+r.broj === Math.min(...brojevi)))];
+    const maxR = parsed[parsed.indexOf(parsed.find(r => r.god*100000+r.broj === Math.max(...brojevi)))];
+    const dates = parsed.map(r => r.datum).sort();
+    const kupciSet = new Set(parsed.map(r => r.kupac));
+
+    document.getElementById('sCnt').textContent   = parsed.length;
+    document.getElementById('sRange').textContent = dates[0] === dates[dates.length-1]
+      ? formatDMY(dates[0])
+      : formatDMY(dates[0]) + ' – ' + formatDMY(dates[dates.length-1]);
+    document.getElementById('sMin').textContent   = minR.broj + '/' + minR.god;
+    document.getElementById('sMax').textContent   = maxR.broj + '/' + maxR.god;
+    document.getElementById('sKupci').textContent = kupciSet.size;
+
+    // Table
+    const tbody = document.getElementById('tbody');
+    tbody.innerHTML = parsed.map(r =>
+      `<tr><td>${formatDMY(r.datum)}</td><td><b>${r.broj}</b>/${r.god}</td><td>${escapeHtml(r.kupac)}</td></tr>`
+    ).join('');
+
+    document.getElementById('rawDump').textContent = rawFirst || '(nema)';
+    document.getElementById('resultCard').style.display = '';
+
+    let msg = `<div class="ok">✓ Parsirano <b>${parsed.length}</b> faktura (${kupciSet.size} jedinstvenih kupaca)</div>`;
+    if (errors.length) msg += '<div class="err">' + errors.map(e => '• '+e).join('<br>') + '</div>';
+    setStatus(msg);
+  }
+
+  function formatDMY(iso){
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-');
+    return `${d}.${m}.${y}`;
+  }
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ── CSV BUILD ─────────────────────────────────────────
+  function buildCSV(){
+    const header = 'broj;god;datum;kupac';
+    const rows = parsed.map(r => `${r.broj};${r.god};${r.datum};"${r.kupac.replace(/"/g,'""')}"`);
+    return [header, ...rows].join('\n');
+  }
+
+  function downloadCSV(){
+    if (!parsed.length) return;
+    const csv = buildCSV();
+    const blob = new Blob(['\ufeff' + csv], {type: 'text/csv;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
+    a.href = url;
+    a.download = `ovjera_fakture_${today}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ── SEND TO B2B (kao i drugi tools-ovi: hash s base64) ─
+  function sendToB2B(){
+    if (!parsed.length) return;
+    const csv = buildCSV();
+    // UTF-8 safe base64 encode
+    const b64 = btoa(unescape(encodeURIComponent(csv)));
+    const url = `${B2B_URL}#import=ovjera&data=${encodeURIComponent(b64)}`;
+    window.open(url, '_blank');
+  }
+</script>
+
+</body>
+</html>
