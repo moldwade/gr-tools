@@ -370,22 +370,77 @@ function parseDugovanja(text){
     /Datum:/i
   ];
   
-  let _debugLines = 0;
-  let _debugMatched = 0;
-  let _debugSkipped = [];
-  
+  // Step 1: Clean and filter lines
+  const allLines = [];
   for(let line of text.split('\n')){
     line = line.trim().replace(/\s+/g, ' ');
     if(!line) continue;
-    _debugLines++;
-    
-    // Skip header/footer
     if(skipPatterns.some(p => p.test(line))) continue;
+    allLines.push(line);
+  }
+  
+  // Step 2: Merge split lines
+  // pdf.js sometimes splits lines like "17 Refan s.p. 7,884.85" into TWO orphan parts:
+  //   - "7,884.85"        (just iznos, no number prefix)
+  //   - "17 Refan s.p."   (broj + naziv, no iznos)
+  // We need to detect and merge these neighbors.
+  
+  // Pattern A: full line "BROJ NAZIV IZNOS" — match directly
+  // Pattern B: orphan iznos "IZNOS" (only numbers + . , )
+  // Pattern C: orphan broj+naziv "BROJ NAZIV" (no trailing number)
+  
+  const isFullLine = (l) => /^\d+\s+.+?\s+[\d,\.]+\s*$/.test(l);
+  const isOrphanIznos = (l) => /^[\d,\.]+\s*$/.test(l) && /[,\.]/.test(l);
+  const isOrphanBrojNaziv = (l) => /^\d+\s+[A-Za-zŠšĐđČčĆćŽž]/.test(l) && !/\d+[,\.]\d+\s*$/.test(l);
+  
+  const mergedLines = [];
+  let i = 0;
+  while(i < allLines.length){
+    const line = allLines[i];
     
-    // Match: "317 BINGO D.O.O 38,848.76" or "317 BINGO D.O.O 38.848,76"
+    // If this line is full → keep it
+    if(isFullLine(line)){
+      mergedLines.push(line);
+      i++;
+      continue;
+    }
+    
+    // If this line is orphan iznos, look at NEXT line — should be broj+naziv
+    if(isOrphanIznos(line) && i + 1 < allLines.length){
+      const next = allLines[i + 1];
+      if(isOrphanBrojNaziv(next)){
+        // Merge: "BROJ NAZIV" + " " + "IZNOS"
+        mergedLines.push(next + ' ' + line);
+        i += 2; // Skip both
+        continue;
+      }
+    }
+    
+    // If this line is orphan broj+naziv, look at PREVIOUS line — should be iznos
+    // (Already handled by reverse — orphan iznos picks next)
+    // But we may have isolated case — orphan broj+naziv FIRST, iznos AFTER
+    if(isOrphanBrojNaziv(line) && i + 1 < allLines.length){
+      const next = allLines[i + 1];
+      if(isOrphanIznos(next)){
+        mergedLines.push(line + ' ' + next);
+        i += 2;
+        continue;
+      }
+    }
+    
+    // Otherwise — keep line as is (may fail regex later, that's OK)
+    mergedLines.push(line);
+    i++;
+  }
+  
+  // Step 3: Parse merged lines
+  let _debugLines = mergedLines.length;
+  let _debugMatched = 0;
+  let _debugSkipped = [];
+  
+  for(const line of mergedLines){
     const m = line.match(/^(\d+)\s+(.+?)\s+([\d,\.]+)\s*$/);
     if(!m){
-      // Lines starting with digit but didn't match - might be missing
       if(/^\d/.test(line) && _debugSkipped.length < 30){
         _debugSkipped.push({reason: 'no regex match', line});
       }
@@ -413,11 +468,10 @@ function parseDugovanja(text){
     }
     
     if(isNaN(saldo) || saldo <= 0){
-      if(_debugSkipped.length < 30) _debugSkipped.push({reason: 'saldo<=0 or NaN', line, broj, naziv, saldoStr});
+      if(_debugSkipped.length < 30) _debugSkipped.push({reason: 'saldo<=0', line, broj, saldoStr});
       continue;
     }
     
-    // Skip if naziv is too short or just numbers
     if(naziv.length < 3 || /^\d+$/.test(naziv)){
       if(_debugSkipped.length < 30) _debugSkipped.push({reason: 'naziv too short', line, broj, naziv});
       continue;
@@ -427,10 +481,10 @@ function parseDugovanja(text){
     rows.push({partner_broj: broj, naziv, saldo});
   }
   
-  console.log(`[Dugovanja parser] Lines processed: ${_debugLines}, Matched: ${_debugMatched}, Skipped: ${_debugSkipped.length}`);
+  console.log(`[Dugovanja parser] Lines (after merge): ${_debugLines}, Matched: ${_debugMatched}, Skipped: ${_debugSkipped.length}`);
   if(_debugSkipped.length > 0){
-    console.log('[Dugovanja parser] First skipped lines:');
-    _debugSkipped.slice(0, 15).forEach(s => console.log('  ', s.reason, '→', JSON.stringify(s)));
+    console.log('[Dugovanja parser] Skipped lines:');
+    _debugSkipped.slice(0, 10).forEach(s => console.log('  ', s.reason, '→', JSON.stringify(s)));
   }
   
   return rows;
