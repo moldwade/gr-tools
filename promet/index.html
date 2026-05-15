@@ -236,6 +236,10 @@
         <div class="stat-label">Ukupan promet</div>
         <div class="stat-value gold" id="statKM">0.00</div>
       </div>
+      <div class="stat" id="statDetailWrap" style="display:none">
+        <div class="stat-label">Detaljnih redova</div>
+        <div class="stat-value purple" id="statDetail">0</div>
+      </div>
     </div>
  
     <div class="actions">
@@ -580,7 +584,35 @@ async function parsePDF(buffer){
   // 5) Item rows
   let _debugTried = 0;
   let _debugMatched = 0;
+  let _debugDetails = 0;
+  
+  // ── DETAY satırları: "Rn. br. NN D/M/YYYY [rabat ...] qty iznos"
+  // Bunları biriktir; bir sonraki "KOM" özet satırına atayacağız.
+  // Pattern: opsiyonel 0-4 rabat sayısı, sonra qty + iznos.
+  const DETAIL_RE = /^Rn\.\s*br\.\s+(\d+)\s+(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(?:[\d.,]+\s+){0,4}?([\d.,]+)\s+([\d.,]+)\s*$/;
+  let pendingDetails = []; // attached to next summary
+  
   for(const L of allLines){
+    // Önce: bu satırı plain text olarak birleştir ve detay mı bak
+    const lineText = L.words.map(w => w.text).join(' ').replace(/\s+/g, ' ').trim();
+    const dm = DETAIL_RE.exec(lineText);
+    if(dm){
+      const [, broj, d, mo, y, qtyRaw, iznosRaw] = dm;
+      const datum = `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`;
+      const qty = parseEUNum(qtyRaw);
+      const iznos = parseEUNum(iznosRaw);
+      if(qty > 0 && iznos > 0){
+        pendingDetails.push({
+          rnBr: parseInt(broj, 10),
+          datum,
+          qty,
+          iznos
+        });
+        _debugDetails++;
+      }
+      continue; // bu satır özet değil
+    }
+    
     let komWord = null, qtyWord = null, iznosWord = null;
     let leftWord = null;     // first item on left (may have barcode + naziv merged)
     let katBrojWord = null;  // kat broj at x≈246
@@ -669,11 +701,12 @@ async function parsePDF(buffer){
       }
       
       _debugMatched++;
-      items.push({ barcode, name, qty, iznos });
+      items.push({ barcode, name, qty, iznos, details: pendingDetails });
+      pendingDetails = []; // reset for next item
     }
   }
   
-  console.log(`[Promet parser] Pages: ${pdf.numPages}, Lines: ${allLines.length}, KOM lines: ${_debugTried}, Matched items: ${_debugMatched}`);
+  console.log(`[Promet parser] Pages: ${pdf.numPages}, Lines: ${allLines.length}, KOM lines: ${_debugTried}, Matched items: ${_debugMatched}, Detail rows: ${_debugDetails}`);
   if(items.length > 0){
     console.log('[Promet parser] First item:', items[0]);
     console.log('[Promet parser] Item 50:', items[49] || items[items.length-1]);
@@ -727,7 +760,7 @@ function checkStatus(data){
   return { level: 'ok', msg: 'OK', calcQty, calcKM, qtyDiff, kmDiff };
 }
  
-// ============== Build CSV (2 sections) ==============
+// ============== Build CSV (2 sections + optional details) ==============
 function buildCSV(data){
   let csv = 'PJ;Datum_od;Datum_do;Ukupno_kom;Ukupno_KM\n';
   csv += `${data.pjName};${data.dateFrom};${data.dateTo};${fmtCSVNum(data.totalQty)};${fmtCSVNum(data.totalKM)}\n`;
@@ -737,6 +770,25 @@ function buildCSV(data){
     const name = (it.name || '').replace(/;/g, ',');
     csv += `${it.barcode};${name};${fmtCSVNum(it.qty)};${fmtCSVNum(it.iznos)}\n`;
   }
+  
+  // 3. bölüm: detay satırları (varsa). Her satır: barkod;rnBr;datum;qty;iznos
+  // PDF "detaljan" format ise bu bölüm dolu olur. "Sažet" PDF ise atlanır.
+  const allDetails = [];
+  for(const it of data.items){
+    if(it.details && it.details.length){
+      for(const d of it.details){
+        allDetails.push({ barcode: it.barcode || '', ...d });
+      }
+    }
+  }
+  if(allDetails.length){
+    csv += '\n';
+    csv += 'Barkod;RnBr;Datum;Kolicina;Iznos\n';
+    for(const d of allDetails){
+      csv += `${d.barcode};${d.rnBr};${d.datum};${fmtCSVNum(d.qty)};${fmtCSVNum(d.iznos)}\n`;
+    }
+  }
+  
   return csv;
 }
  
@@ -745,18 +797,29 @@ function renderResults(){
   $('results').style.display = 'block';
   
   // Aggregate stats
-  let totalItems = 0, totalQty = 0, totalKM = 0;
+  let totalItems = 0, totalQty = 0, totalKM = 0, totalDetails = 0;
   const okPDFs = parsedPDFs.filter(p => p.data);
   for(const p of okPDFs){
     totalItems += p.data.items.length;
     totalQty += p.data.totalQty;
     totalKM += p.data.totalKM;
+    for(const it of p.data.items){
+      if(it.details) totalDetails += it.details.length;
+    }
   }
   
   $('statPJ').textContent = okPDFs.length;
   $('statItems').textContent = totalItems;
   $('statQty').textContent = totalQty.toFixed(0);
   $('statKM').textContent = fmtNum(totalKM);
+  
+  // Detaylı PDF varsa detay sayacını göster
+  if(totalDetails > 0){
+    $('statDetail').textContent = totalDetails;
+    $('statDetailWrap').style.display = '';
+  } else {
+    $('statDetailWrap').style.display = 'none';
+  }
   
   // Render PJ cards
   $('pjList').innerHTML = parsedPDFs.map((p, idx) => renderPJCard(p, idx)).join('');
