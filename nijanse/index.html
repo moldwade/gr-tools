@@ -80,6 +80,22 @@
   .saved-item .nm{font-weight:600;flex:1}
   .saved-item .meta{color:#888;font-size:11px}
   .saved-item .acts{display:flex;gap:4px}
+
+  /* ── NOVO: Kompresija panel ── */
+  .compress-panel{background:#f0f9f4;border:1px solid #b8e0c8;border-radius:8px;padding:10px 12px;margin-bottom:10px}
+  .compress-header{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .compress-toggle{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:#156d3b}
+  .compress-toggle input[type="checkbox"]{width:18px;height:18px;cursor:pointer;accent-color:#1a8a4a}
+  .compress-controls{display:flex;align-items:center;gap:10px;flex:1;flex-wrap:wrap;margin-left:8px;padding-left:12px;border-left:1px solid #b8e0c8}
+  .compress-controls.disabled{opacity:0.4;pointer-events:none}
+  .quality-slider{flex:1;min-width:140px;max-width:240px;accent-color:#1a8a4a}
+  .quality-display{font-size:13px;font-weight:700;color:#1a8a4a;min-width:46px;text-align:right;font-variant-numeric:tabular-nums}
+  .quality-presets{display:flex;gap:4px}
+  .quality-presets button{padding:4px 9px;font-size:11px;background:#fff;color:#156d3b;border:1px solid #b8e0c8}
+  .quality-presets button:hover:not(:disabled){background:#dff3e6}
+  .quality-presets button.active{background:#1a8a4a;color:#fff;border-color:#1a8a4a}
+  .compress-info{font-size:11px;color:#666;margin-top:6px;display:flex;gap:14px;flex-wrap:wrap}
+  .compress-info b{color:#156d3b}
 </style>
 </head>
 <body>
@@ -87,9 +103,9 @@
 <h1 style="display:flex;align-items:center;gap:14px">
   <img src="../gr-logo.png" alt="Golden Rose" style="height:40px;width:auto;filter:brightness(0)" />
   <span>Nijanse Tool</span>
-  <span class="badge">v3 ⚡</span>
+  <span class="badge">v3.1 ⚡</span>
 </h1>
-<div class="sub">Toplu thumbnail download · auto-rename · za Shopify · <span style="color:#1a8a4a;font-weight:600">⚡ Cloudflare Worker</span></div>
+<div class="sub">Toplu thumbnail download · auto-rename · za Shopify · <span style="color:#1a8a4a;font-weight:600">⚡ Cloudflare Worker</span> · <span style="color:#1a8a4a;font-weight:600">🗜️ Auto-kompresija</span></div>
 
 <div class="help">
   <b>💡 Kako se koristi:</b>
@@ -97,7 +113,8 @@
   <br>2. Unesi početni ID slike (5118), početni broj nijanse (51), broj nijansi (4) i ime serije
   <br>3. Klikni <b>"Učitaj"</b> — alat preuzima sve thumbnaile
   <br>4. Pod svaku sliku upiši ime nijanse (Moonlit, Cosmos, Aurora...)
-  <br>5. Klikni <b>"💾 Preuzmi sve (ZIP)"</b> — fajlovi se snimaju kao <code>"Sparkle Glow 51 Moonlit.jpg"</code>
+  <br>5. <b>(opciono)</b> Uključi <b>"🗜️ Kompresija"</b> ako želiš manje fajlove
+  <br>6. Klikni <b>"💾 Preuzmi sve (ZIP)"</b> — fajlovi se snimaju kao <code>"Sparkle Glow 51 Moonlit.jpg"</code>
   <br><br><b>📦 ZIP sadrži 3 odvojene foldere:</b>
   <br>🖼️ <b>Zoom_Velika</b> — velike slike za Shopify glavni proizvod
   <br>📸 <b>Middle_Srednja</b> — srednje slike (thumbnail)
@@ -161,6 +178,30 @@
   </div>
 </div>
 
+<!-- ── NOVO: Kompresija kontrole ── -->
+<div id="compressPanel" class="compress-panel" style="display:none">
+  <div class="compress-header">
+    <label class="compress-toggle">
+      <input type="checkbox" id="chkCompress" onchange="toggleCompress()" />
+      <span>🗜️ Kompresija slika</span>
+    </label>
+    <div id="compressControls" class="compress-controls disabled">
+      <div class="quality-presets">
+        <button type="button" class="qp" data-q="85" onclick="setQuality(85)">Visok</button>
+        <button type="button" class="qp active" data-q="75" onclick="setQuality(75)">Srednji</button>
+        <button type="button" class="qp" data-q="60" onclick="setQuality(60)">Jak</button>
+      </div>
+      <input type="range" id="qualitySlider" class="quality-slider" min="30" max="95" value="75" oninput="updateQuality(this.value)" />
+      <span class="quality-display"><span id="qualityVal">75</span>%</span>
+    </div>
+  </div>
+  <div class="compress-info" id="compressInfo" style="display:none">
+    <span>📏 Dimenzije: <b>nepromijenjene</b> (1000x1000)</span>
+    <span>📦 Format: <b>JPEG</b></span>
+    <span>💾 Tipična ušteda: <b id="estSavings">~70%</b> manji fajl</span>
+  </div>
+</div>
+
 <div id="formatBar" class="results-bar" style="display:none;background:#fff5f5;border-color:#fbb">
   <div style="font-size:12px;color:#704c00">
     <b>📦 Formati u ZIP-u:</b>
@@ -221,6 +262,107 @@ function deleteSerija(serija){
   delete data[serija];
   localStorage.setItem('gr-nijanse-data', JSON.stringify(data));
   renderSavedList();
+}
+
+// ── NOVO: Kompresija preferences ──
+function loadCompressPref(){
+  try {
+    return JSON.parse(localStorage.getItem('gr-nijanse-compress') || '{"enabled":false,"quality":75}');
+  } catch(e){ return {enabled:false, quality:75}; }
+}
+function saveCompressPref(){
+  const pref = {
+    enabled: document.getElementById('chkCompress').checked,
+    quality: parseInt(document.getElementById('qualitySlider').value)
+  };
+  localStorage.setItem('gr-nijanse-compress', JSON.stringify(pref));
+}
+
+function toggleCompress(){
+  const enabled = document.getElementById('chkCompress').checked;
+  const ctrls = document.getElementById('compressControls');
+  const info = document.getElementById('compressInfo');
+  if(enabled){
+    ctrls.classList.remove('disabled');
+    info.style.display = 'flex';
+  } else {
+    ctrls.classList.add('disabled');
+    info.style.display = 'none';
+  }
+  saveCompressPref();
+}
+
+function setQuality(q){
+  document.getElementById('qualitySlider').value = q;
+  updateQuality(q);
+  // Update active preset button
+  document.querySelectorAll('.qp').forEach(b=>{
+    b.classList.toggle('active', parseInt(b.dataset.q) === q);
+  });
+}
+
+function updateQuality(q){
+  document.getElementById('qualityVal').textContent = q;
+  // Estimate savings (rough)
+  let savings;
+  if(q >= 90) savings = '~30%';
+  else if(q >= 80) savings = '~50%';
+  else if(q >= 70) savings = '~65%';
+  else if(q >= 55) savings = '~75%';
+  else savings = '~85%';
+  document.getElementById('estSavings').textContent = savings + ' manji fajl';
+  // Update active preset state
+  document.querySelectorAll('.qp').forEach(b=>{
+    b.classList.toggle('active', parseInt(b.dataset.q) === parseInt(q));
+  });
+  saveCompressPref();
+}
+
+// ── NOVO: Funkcija za kompresiju bloba kroz canvas ──
+async function compressBlob(blob, quality){
+  // quality: 0-100 (broj), pretvaramo u 0-1 za toBlob
+  return new Promise((resolve)=>{
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(blob);
+    let resolved = false;
+    const finish = (val)=>{
+      if(resolved) return;
+      resolved = true;
+      URL.revokeObjectURL(objectUrl);
+      resolve(val);
+    };
+    img.onload = ()=>{
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        // Bijela pozadina (JPEG nema alpha kanal)
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob((compressedBlob)=>{
+          if(compressedBlob && compressedBlob.size > 100){
+            // Ako kompresovana verzija je veća nego originalna (rijetko), vrati original
+            if(compressedBlob.size >= blob.size){
+              finish(blob);
+            } else {
+              finish(compressedBlob);
+            }
+          } else {
+            finish(blob); // Fallback na original
+          }
+        }, 'image/jpeg', quality/100);
+      } catch(e){
+        console.warn('Compress failed:', e);
+        finish(blob); // Fallback na original
+      }
+    };
+    img.onerror = ()=>finish(blob); // Fallback na original
+    img.src = objectUrl;
+    // Timeout safety
+    setTimeout(()=>finish(blob), 10000);
+  });
 }
 
 function renderSavedList(){
@@ -347,6 +489,7 @@ async function loadShades(){
   renderGrid();
   updateStats();
   document.getElementById('resultsBar').style.display = 'flex';
+  document.getElementById('compressPanel').style.display = 'block';
   document.getElementById('formatBar').style.display = 'flex';
 }
 
@@ -456,6 +599,10 @@ async function downloadZip(){
     return;
   }
   
+  // ── NOVO: Kompresija postavke ──
+  const compressEnabled = document.getElementById('chkCompress').checked;
+  const compressQuality = parseInt(document.getElementById('qualitySlider').value);
+  
   document.getElementById('loading').classList.add('show');
   document.getElementById('loadingText').textContent = 'Pripremam...';
   document.getElementById('progressBar').style.width = '0%';
@@ -469,6 +616,9 @@ async function downloadZip(){
   let totalTasks = okShades.length * formatCount;
   let done = 0;
   let failed = 0;
+  // ── NOVO: Stats za kompresiju ──
+  let totalOriginalBytes = 0;
+  let totalFinalBytes = 0;
   const startTime = Date.now();
   
   // Build all download tasks
@@ -575,7 +725,22 @@ async function downloadZip(){
       blob = await fetchSingle(task.url, 6000);
     }
     if(blob){
-      task.folder.file(task.filename, blob);
+      const originalSize = blob.size;
+      totalOriginalBytes += originalSize;
+      
+      // ── NOVO: Primijeni kompresiju ako je uključena ──
+      let finalBlob = blob;
+      if(compressEnabled){
+        try {
+          finalBlob = await compressBlob(blob, compressQuality);
+        } catch(e){
+          console.warn('Compression failed for', task.filename, e);
+          finalBlob = blob; // Fallback na original
+        }
+      }
+      
+      totalFinalBytes += finalBlob.size;
+      task.folder.file(task.filename, finalBlob);
     } else {
       failed++;
     }
@@ -583,12 +748,14 @@ async function downloadZip(){
     const pct = Math.round((done/totalTasks)*100);
     const elapsed = Math.round((Date.now()-startTime)/1000);
     document.getElementById('progressBar').style.width = pct + '%';
+    const compressTxt = compressEnabled ? ` · 🗜️ ${compressQuality}%` : '';
     document.getElementById('loadingText').textContent = 
-      `${task.format}: ${done}/${totalTasks} (${pct}%) · ${elapsed}s · ${failed} grešaka`;
+      `${task.format}: ${done}/${totalTasks} (${pct}%) · ${elapsed}s · ${failed} grešaka${compressTxt}`;
   }
   
   // CRITICAL: Process tasks in PARALLEL batches of 10 (Worker handles high concurrency)
-  const PARALLEL = 10;
+  // Kad je kompresija uključena, smanjujemo na 6 da ne preopteretimo CPU
+  const PARALLEL = compressEnabled ? 6 : 10;
   for(let i = 0; i < tasks.length; i += PARALLEL){
     const batch = tasks.slice(i, i + PARALLEL);
     await Promise.all(batch.map(processTask));
@@ -602,12 +769,22 @@ async function downloadZip(){
   
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `${currentSerija.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().slice(0,10)}.zip`;
+  a.download = `${currentSerija.replace(/[^a-zA-Z0-9]/g,'_')}_${compressEnabled?'compressed_'+compressQuality+'q_':''}${new Date().toISOString().slice(0,10)}.zip`;
   a.click();
   
   const totalSec = Math.round((Date.now()-startTime)/1000);
   document.getElementById('loading').classList.remove('show');
-  toast(`✓ ZIP preuzet za ${totalSec}s · ${done-failed}/${totalTasks} uspješno`, 4000);
+  
+  // ── NOVO: Detaljan toast s informacijama o uštedi ──
+  let msg = `✓ ZIP preuzet za ${totalSec}s · ${done-failed}/${totalTasks} uspješno`;
+  if(compressEnabled && totalOriginalBytes > 0){
+    const savedMB = ((totalOriginalBytes - totalFinalBytes) / 1024 / 1024).toFixed(2);
+    const savedPct = Math.round((1 - totalFinalBytes/totalOriginalBytes) * 100);
+    const origMB = (totalOriginalBytes / 1024 / 1024).toFixed(1);
+    const finalMB = (totalFinalBytes / 1024 / 1024).toFixed(1);
+    msg += ` · 🗜️ ${origMB}MB → ${finalMB}MB (uštedjeno ${savedMB}MB / ${savedPct}%)`;
+  }
+  toast(msg, 6000);
 }
 
 // Lightbox
@@ -622,8 +799,18 @@ document.addEventListener('keydown', e => {
   if(e.key === 'Escape') closeLightbox();
 });
 
+// ── NOVO: Init compress preferences iz localStorage ──
+function initCompressPrefs(){
+  const pref = loadCompressPref();
+  document.getElementById('chkCompress').checked = pref.enabled;
+  document.getElementById('qualitySlider').value = pref.quality;
+  updateQuality(pref.quality);
+  toggleCompress();
+}
+
 // Init
 renderSavedList();
+initCompressPrefs();
 </script>
 
 </body>
