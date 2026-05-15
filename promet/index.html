@@ -662,8 +662,8 @@ async function parsePDF(buffer){
       
       if(leftWord){
         const t = leftWord.text;
-        // Try to extract 13-digit barcode at start
-        const barcodeMatch = t.match(/^(\d{13})\b\s*(.*)$/);
+        // Try to extract 8-14 digit barcode at start (esnek aralık — eski PDF'lerde 13 değil farklı uzunluklar olabilir)
+        const barcodeMatch = t.match(/^(\d{8,14})\b\s*(.*)$/);
         if(barcodeMatch){
           barcode = barcodeMatch[1];
           name = barcodeMatch[2].trim();
@@ -689,6 +689,26 @@ async function parsePDF(buffer){
         }
         if(moreNameParts.length){
           name = (name + ' ' + moreNameParts.join(' ')).trim();
+        }
+      }
+      
+      // Fallback (ÇOK ÖNEMLİ — eski PDF'ler için): Eğer hala barcode yoksa,
+      // tüm satırın metnini birleştirip ilk rakam dizilemi'ni dene.
+      if(!barcode){
+        // Sadece left-side word'leri al (KOM ve onun solu hariç)
+        const leftText = L.words
+          .filter(w => w.x0 < 245) // KOM'dan önce
+          .map(w => w.text)
+          .join(' ');
+        // 8-14 haneli rakam dizilemi ara (boşluklu veya birleşik)
+        const m = /(?:^|\s)(\d{8,14})(\s|\d{0,3}[A-ZŠČĆŽĐ])/.exec(leftText);
+        if(m){
+          barcode = m[1];
+          // Eğer name boş veya çok kısaysa, barcodu çıkarıp yeniden parse et
+          if(!name || name.length < 3){
+            const afterBc = leftText.indexOf(barcode) + barcode.length;
+            name = leftText.slice(afterBc).trim();
+          }
         }
       }
       
