@@ -501,7 +501,11 @@ function buildCSV(rows){
   let csv = 'Barkod;Sifra;Kat_broj;Naziv;Stanje;Cijena;Vrijednost\n';
   for(const r of rows){
     const naziv = (r.naziv || '').replace(/"/g, '').replace(/;/g, ',');
-    csv += `${r.barkod};${r.sifra};${r.kat_broj};${naziv};${r.stanje};${r.cijena};${r.vrijednost}\n`;
+    // FIX: EU format ("2.124,00") normalizovan u plain broj (2124) — sprječava da app pročita 2.124 kao ~2 komada
+    const stanjeN = parseEUNum(r.stanje) || 0;
+    const cijenaN = parseEUNum(r.cijena) || 0;
+    const vrijednostN = parseEUNum(r.vrijednost) || 0;
+    csv += `${r.barkod};${r.sifra};${r.kat_broj};${naziv};${stanjeN};${cijenaN};${vrijednostN}\n`;
   }
   return csv;
 }
