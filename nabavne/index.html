@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="bs">
+<head>
+<meta charset="UTF-8">
+<title>Nabavne Cijene PDF→B2B · Golden Rose</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="../gr-logo.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+    background:#000;color:#fff;min-height:100vh;line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  body::before{
+    content:'';position:fixed;inset:0;
+    background:radial-gradient(ellipse 80% 50% at 50% 0%, rgba(180,83,9,0.09), transparent 60%);
+    pointer-events:none;z-index:0;
+  }
+
+  .container{max-width:1300px;margin:0 auto;padding:30px 20px;position:relative;z-index:1}
+
+  /* Header */
+  header{
+    display:flex;align-items:center;gap:14px;margin-bottom:30px;
+    padding-bottom:20px;border-bottom:1px solid rgba(255,255,255,0.08);
+  }
+  header img{height:44px;width:auto}
+  .header-text{flex:1}
+  .header-text h1{font-size:18px;font-weight:600;margin-bottom:3px}
+  .header-text .sub{font-size:12px;color:#888}
+  .back-link{
+    color:#999;text-decoration:none;font-size:12px;
+    padding:6px 12px;border:1px solid rgba(255,255,255,0.15);
+    border-radius:8px;transition:all 0.2s;
+  }
+  .back-link:hover{background:rgba(255,255,255,0.05);color:#ffd700;border-color:rgba(255,215,0,0.3)}
+
+  /* Admin banner */
+  .admin-note{
+    background:rgba(180,83,9,0.12);border:1px solid rgba(180,83,9,0.35);
+    color:#fcd34d;border-radius:10px;padding:12px 16px;margin-bottom:20px;font-size:12.5px;line-height:1.5;
+  }
+  .admin-note strong{color:#fbbf24}
+
+  /* Drop zone */
+  .dropzone{
+    border:2px dashed rgba(255,255,255,0.2);border-radius:16px;
+    padding:60px 30px;text-align:center;cursor:pointer;
+    transition:all 0.3s;background:rgba(255,255,255,0.02);
+    margin-bottom:24px;
+  }
+  .dropzone:hover{border-color:rgba(180,83,9,0.5);background:rgba(180,83,9,0.04)}
+  .dropzone.drag{border-color:#d97706;background:rgba(180,83,9,0.08);transform:scale(1.005)}
+  .dropzone.has-file{border-style:solid;border-color:rgba(180,83,9,0.5);background:rgba(180,83,9,0.05)}
+  .dropzone .icon{font-size:50px;margin-bottom:14px;display:block;opacity:0.7}
+  .dropzone .text{font-size:15px;color:#ddd;margin-bottom:6px;font-weight:500}
+  .dropzone .sub{font-size:12px;color:#888}
+  .dropzone input{display:none}
+
+  /* Status */
+  .status{
+    padding:14px 18px;border-radius:10px;margin-bottom:20px;
+    font-size:13px;display:none;
+  }
+  .status.show{display:block;animation:fadeIn 0.3s}
+  .status.info{background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);color:#93c5fd}
+  .status.success{background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#86efac}
+  .status.error{background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#fca5a5}
+  .status.warn{background:rgba(255,165,0,0.12);border:1px solid rgba(255,165,0,0.3);color:#fcd34d}
+
+  /* Actions */
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+  .btn{
+    padding:11px 20px;border:none;border-radius:10px;cursor:pointer;
+    font-size:13px;font-weight:600;transition:all 0.2s;
+    display:inline-flex;align-items:center;gap:8px;
+    font-family:inherit;
+  }
+  .btn-primary{background:linear-gradient(135deg,#d97706,#b45309);color:#fff}
+  .btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(180,83,9,0.4)}
+  .btn-secondary{background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1)}
+  .btn-secondary:hover{background:rgba(255,255,255,0.1)}
+  .btn:disabled{opacity:0.4;cursor:not-allowed}
+
+  /* Stats */
+  .stats{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+    gap:12px;margin-bottom:20px;
+  }
+  .stat{
+    background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+    border-radius:10px;padding:14px;
+  }
+  .stat-label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+  .stat-value{font-size:20px;font-weight:700;color:#fff}
+  .stat-value.gold{color:#ffd700}
+  .stat-value.green{color:#4ade80}
+  .stat-value.red{color:#fca5a5}
+
+  /* Table */
+  .table-wrap{
+    background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);
+    border-radius:14px;overflow:hidden;margin-bottom:20px;
+  }
+  .table-header{
+    padding:14px 18px;background:rgba(255,255,255,0.04);
+    border-bottom:1px solid rgba(255,255,255,0.08);
+    display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;
+  }
+  .table-header strong{font-size:13px}
+  .search{
+    background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);
+    color:#fff;padding:7px 10px;border-radius:8px;font-size:12px;width:220px;
+    font-family:inherit;
+  }
+  .search:focus{outline:none;border-color:rgba(180,83,9,0.6)}
+  .table-scroll{max-height:600px;overflow:auto}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{
+    background:rgba(255,255,255,0.04);padding:11px 12px;text-align:left;
+    font-weight:600;color:#bbb;font-size:11px;text-transform:uppercase;
+    letter-spacing:0.4px;position:sticky;top:0;z-index:1;
+    border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;
+  }
+  th.num,td.num{text-align:right;font-family:'SF Mono',Menlo,Monaco,Consolas,monospace;font-size:12px}
+  td{padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.04)}
+  tr:hover td{background:rgba(255,255,255,0.02)}
+  .barkod{color:#aaa;font-family:monospace;font-size:11px}
+  .nabavna{color:#fbbf24;font-weight:600}
+  .kolicina{color:#888}
+
+  /* Empty state */
+  .empty{text-align:center;padding:60px 20px;color:#666}
+  .empty .icon{font-size:48px;margin-bottom:12px;display:block;opacity:0.4}
+
+  /* Loader */
+  .loader{display:none;text-align:center;padding:30px}
+  .loader.show{display:block}
+  .spinner{
+    width:40px;height:40px;margin:0 auto 14px;
+    border:3px solid rgba(255,255,255,0.1);border-top-color:#d97706;
+    border-radius:50%;animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+  /* Mobile */
+  @media (max-width:600px){
+    .container{padding:20px 14px}
+    header{flex-wrap:wrap}
+    .stats{grid-template-columns:repeat(2,1fr)}
+    th,td{padding:6px 8px;font-size:11px}
+    .search{width:130px}
+    .actions{flex-direction:column}
+    .btn{width:100%;justify-content:center}
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <header>
+    <img src="../gr-logo.png" alt="GR" />
+    <div class="header-text">
+      <h1>🏷️ Nabavne Cijene PDF→B2B</h1>
+      <div class="sub">Nabavna (giriš) cijena po barkodu · Izvor: „Stanje zaliha – po prosječnim cijenama (FIFO)" · 100% u browseru</div>
+    </div>
+    <a href="/" class="back-link">← Tools</a>
+  </header>
+
+  <div class="admin-note">
+    🔒 <strong>Samo za admina.</strong> Ovaj alat čita <strong>nabavnu</strong> cijenu (prosječna/FIFO) iz izvještaja
+    <code>nabavna cijena gr.pdf</code> i šalje je u zaštićenu B2B kolekciju <code>nabavne_cijene</code> (keyed by barkod).
+    Ne dira prodajne cijene (VPC) niti proizvode koje vide komercijalisti.
+  </div>
+
+  <!-- Drop zone -->
+  <label class="dropzone" id="dropzone">
+    <span class="icon">🏷️</span>
+    <div class="text">Povuci PDF nabavnih cijena ovdje ili klikni za odabir</div>
+    <div class="sub">Format: <code>Stanje zaliha (Po prosječnim cijenama - FIFO)</code></div>
+    <input type="file" id="fileInput" accept=".pdf,application/pdf" />
+  </label>
+
+  <!-- Status -->
+  <div class="status" id="status"></div>
+
+  <!-- Loader -->
+  <div class="loader" id="loader">
+    <div class="spinner"></div>
+    <div style="color:#bbb;font-size:13px" id="loaderText">Obrađujem PDF...</div>
+  </div>
+
+  <!-- Results -->
+  <div id="results" style="display:none">
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">Sa nabavnom cijenom</div>
+        <div class="stat-value green" id="statCount">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Preskočeno (0,00)</div>
+        <div class="stat-value red" id="statZero">0</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Prosječna nabavna</div>
+        <div class="stat-value gold" id="statAvg">0.00</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Duplikata</div>
+        <div class="stat-value" id="statDup">0</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="btnSendB2B">
+        📤 Pošalji u B2B
+      </button>
+      <button class="btn btn-secondary" id="btnDownload">
+        💾 Preuzmi CSV
+      </button>
+      <button class="btn btn-secondary" id="btnCopy">
+        📋 Kopiraj CSV
+      </button>
+      <button class="btn btn-secondary" id="btnReset">
+        🔄 Novi PDF
+      </button>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-header">
+        <strong>📊 Pregled nabavnih cijena</strong>
+        <input type="search" class="search" id="searchInput" placeholder="🔍 Barkod ili naziv..." />
+      </div>
+      <div class="table-scroll">
+        <table id="resultsTable">
+          <thead>
+            <tr>
+              <th style="width:130px">Barkod</th>
+              <th>Naziv (info)</th>
+              <th class="num" style="width:90px">Količina</th>
+              <th class="num" style="width:120px">Nabavna</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Empty state -->
+  <div class="empty" id="empty">
+    <span class="icon">📂</span>
+    <div>Učitaj PDF da počneš</div>
+  </div>
+
+</div>
+
+<script>
+// pdf.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const $ = id => document.getElementById(id);
+let parsedRows = [];   // [{barcode, naziv, kolicina, nabavna}] — deduplikovano
+let csvContent = '';
+let skippedZero = 0;
+let duplicates = 0;
+
+// ============== Helpers ==============
+function showStatus(msg, type){
+  const s = $('status');
+  s.className = 'status show ' + type;
+  s.innerHTML = msg;
+  if(type === 'success') setTimeout(()=>s.classList.remove('show'), 6000);
+}
+function fmtNum(n){
+  return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+// US format iz izvještaja: "1,439.00" → 1439, "2.02" → 2.02 (zarez=hiljade, tačka=decimala)
+function parseUSNum(s){
+  if(!s) return 0;
+  return parseFloat(String(s).replace(/,/g, '')) || 0;
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+// ============== Drop Zone ==============
+const dz = $('dropzone');
+const fi = $('fileInput');
+
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('drag');
+  if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fi.addEventListener('change', e => { if(e.target.files.length) handleFile(e.target.files[0]); });
+
+// ============== File Handler ==============
+async function handleFile(file){
+  if(!file.name.toLowerCase().endsWith('.pdf')){
+    showStatus('❌ Molim učitaj PDF fajl', 'error');
+    return;
+  }
+
+  dz.classList.add('has-file');
+  dz.querySelector('.text').textContent = '✓ ' + file.name;
+  dz.querySelector('.sub').textContent = (file.size/1024).toFixed(1) + ' KB';
+
+  $('loader').classList.add('show');
+  $('results').style.display = 'none';
+  $('empty').style.display = 'none';
+  $('status').classList.remove('show');
+
+  try {
+    const buffer = await file.arrayBuffer();
+    const { rows, skipped, dups } = await parsePDF(buffer);
+
+    if(rows.length === 0){
+      showStatus('⚠️ Nije pronađena nijedna nabavna cijena. Provjeri da je ovo „Stanje zaliha (po prosječnim cijenama - FIFO)" izvještaj.', 'warn');
+      $('loader').classList.remove('show');
+      $('empty').style.display = 'block';
+      return;
+    }
+
+    parsedRows = rows;
+    skippedZero = skipped;
+    duplicates = dups;
+    csvContent = buildCSV(rows);
+    renderResults(rows);
+    showStatus(`✅ Pronađeno <strong>${rows.length}</strong> nabavnih cijena (${skipped} preskočeno 0,00${dups?`, ${dups} duplikata`:''})`, 'success');
+  } catch(err){
+    console.error(err);
+    showStatus('❌ Greška pri obradi: ' + err.message, 'error');
+    $('empty').style.display = 'block';
+  }
+  $('loader').classList.remove('show');
+}
+
+// ============== PDF Parser ==============
+// Izvještaj "Stanje zaliha (po prosječnim cijenama - FIFO)". Kolone (x0):
+//   Barkod ~76 (13 cifara) | Naziv ~112-420 | Količina ~430-447 | Cijena(NABAVNA) ~488-492 | Vrijednost ~526-551
+// "(Razlika)" je zasebna linija ispod reda (lone broj ~x337-352, EU format) — nema barkod, pa se filtrira sama.
+// Brojevi u glavnim kolonama su US format ("1,439.00"). Nabavna = token u x-bandu [478,512].
+async function parsePDF(buffer){
+  const pdf = await pdfjsLib.getDocument({data: buffer}).promise;
+  const map = new Map();       // barcode -> row (last-wins)
+  let skipped = 0, dups = 0;
+  const US = /^[\d,]*\d\.\d{2}$/;
+
+  for(let p = 1; p <= pdf.numPages; p++){
+    $('loaderText').textContent = `Obrađujem stranicu ${p} / ${pdf.numPages}...`;
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+
+    const words = content.items
+      .filter(it => it.str && it.str.trim().length)
+      .map(it => ({ t: it.str.trim(), x: it.transform[4], y: it.transform[5] }));
+
+    // grupiši po redu (zaokruženi y, bottom-up)
+    const rowMap = {};
+    for(const w of words){ const k = Math.round(w.y); (rowMap[k] = rowMap[k] || []).push(w); }
+
+    for(const k of Object.keys(rowMap)){
+      const row = rowMap[k].sort((a,b) => a.x - b.x);
+      const first = row[0];
+      // Red proizvoda = počinje barkodom (x<100, 8-14 cifara)
+      if(!(first.x < 100 && /^\d{8,14}$/.test(first.t))) continue;
+      const barcode = first.t;
+
+      // Numerički tokeni desno (x>420) u US formatu: [Količina, Cijena, Vrijednost]
+      const nums = row.filter(w => w.x > 420 && US.test(w.t)).sort((a,b) => a.x - b.x);
+      // Nabavna = token u x-bandu [478,512]; fallback = srednji od tri
+      let cijenaTok = nums.find(w => w.x >= 478 && w.x <= 512);
+      if(!cijenaTok && nums.length >= 3) cijenaTok = nums[Math.floor(nums.length / 2)];
+      if(!cijenaTok) continue;
+
+      const nabavna = parseUSNum(cijenaTok.t);
+      if(!(nabavna > 0)){ skipped++; continue; }
+
+      const kolicina = nums.length ? parseUSNum(nums[0].t) : 0;
+
+      // Naziv (samo info): tokeni x 108-420, izuzmi jedinicu KOM
+      const naziv = row
+        .filter(w => w.x > 108 && w.x < 420 && w.t !== 'KOM')
+        .map(w => w.t).join(' ')
+        .replace(/\s*KOM\s*$/, '').trim();
+
+      if(map.has(barcode)) dups++;
+      map.set(barcode, { barcode, naziv, kolicina, nabavna });
+    }
+  }
+
+  return { rows: Array.from(map.values()), skipped, dups };
+}
+
+// ============== Build CSV (Barkod;Nabavna) — B2B tools-import rail ==============
+function buildCSV(rows){
+  let csv = 'Barkod;Nabavna\n';
+  for(const r of rows){
+    csv += `${r.barcode};${r.nabavna}\n`;
+  }
+  return csv;
+}
+
+// ============== Render ==============
+function renderResults(rows){
+  $('results').style.display = 'block';
+
+  let sum = 0;
+  for(const r of rows) sum += r.nabavna;
+  const avg = rows.length ? sum / rows.length : 0;
+
+  $('statCount').textContent = rows.length;
+  $('statZero').textContent = skippedZero;
+  $('statAvg').textContent = fmtNum(avg);
+  $('statDup').textContent = duplicates;
+
+  renderTable(rows);
+}
+
+function renderTable(rows){
+  const tb = $('tableBody');
+  tb.innerHTML = rows.map(r => `
+    <tr>
+      <td><span class="barkod">${r.barcode}</span></td>
+      <td>${escapeHtml(r.naziv || '')}</td>
+      <td class="num"><span class="kolicina">${fmtNum(r.kolicina)}</span></td>
+      <td class="num"><span class="nabavna">${fmtNum(r.nabavna)}</span></td>
+    </tr>
+  `).join('');
+}
+
+// ============== Filter ==============
+$('searchInput').addEventListener('input', e => {
+  const q = e.target.value.toLowerCase().trim();
+  if(!q) return renderTable(parsedRows);
+  renderTable(parsedRows.filter(r =>
+    r.barcode.includes(q) || (r.naziv || '').toLowerCase().includes(q)
+  ));
+});
+
+// ============== Buttons ==============
+$('btnDownload').addEventListener('click', () => {
+  const blob = new Blob(['﻿' + csvContent], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  a.download = `nabavne_cijene_${today}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showStatus('💾 CSV preuzet', 'success');
+});
+
+$('btnCopy').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(csvContent);
+    showStatus('📋 CSV kopiran u clipboard', 'success');
+  } catch(e) {
+    showStatus('❌ Kopiranje nije moguće: ' + e.message, 'error');
+  }
+});
+
+// 📤 Pošalji u B2B → kolekcija nabavne_cijene (admin-only na B2B strani)
+$('btnSendB2B').addEventListener('click', () => {
+  if(!parsedRows.length){
+    showStatus('❌ Nema nabavnih cijena za slanje', 'error');
+    return;
+  }
+
+  let summary = `📤 Šaljem nabavne cijene u B2B:<br>`;
+  summary += `• <strong>${parsedRows.length}</strong> proizvoda sa nabavnom cijenom<br>`;
+  summary += `• ${skippedZero} preskočeno (cijena 0,00)`;
+  if(duplicates > 0) summary += `<br>• ${duplicates} duplikatnih barkodova, zadnji korišten`;
+
+  try {
+    const encoded = btoa(unescape(encodeURIComponent(csvContent)));
+    if(encoded.length > 1500000){
+      showStatus('⚠️ Podaci su preveliki za direktan transfer. Koristite "Preuzmi CSV" i ručno importujte u B2B.', 'warn');
+      return;
+    }
+    const b2bUrl = 'https://b2b.goldenrose.ba/#import=nabavne_cijene&data=' + encoded;
+    showStatus(summary + '<br><br>📤 Otvaram B2B sistem... Prijavite se kao admin ako niste već.', 'info');
+    window.open(b2bUrl, '_blank');
+  } catch(e) {
+    console.error(e);
+    showStatus('❌ Greška pri pripremi za slanje: ' + e.message, 'error');
+  }
+});
+
+$('btnReset').addEventListener('click', () => {
+  parsedRows = [];
+  csvContent = '';
+  skippedZero = 0;
+  duplicates = 0;
+  $('results').style.display = 'none';
+  $('empty').style.display = 'block';
+  $('status').classList.remove('show');
+  dz.classList.remove('has-file');
+  dz.querySelector('.text').textContent = 'Povuci PDF nabavnih cijena ovdje ili klikni za odabir';
+  dz.querySelector('.sub').innerHTML = 'Format: <code>Stanje zaliha (Po prosječnim cijenama - FIFO)</code>';
+  fi.value = '';
+});
+</script>
+</body>
+</html>
