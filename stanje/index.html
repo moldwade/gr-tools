@@ -217,9 +217,6 @@
       <button class="btn" id="btnSendB2B" style="background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff">
         📤 Pošalji u B2B
       </button>
-      <button class="btn" id="btnSendNabavne" style="background:linear-gradient(135deg,#ca8a04,#a16207);color:#000" title="Admin — šalje nabavne (giriš) cijene u zaštićenu B2B kolekciju nabavne_cijene">
-        🔒 Pošalji nabavne u B2B
-      </button>
       <button class="btn btn-secondary" id="btnCopy">
         📋 Kopiraj CSV
       </button>
@@ -275,7 +272,6 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 const $ = id => document.getElementById(id);
 let parsedData = [];
 let csvContent = '';
-let costData = null;  // { records:[{barcode,nabavna,updatedAt}], skippedZero, skippedNoBarcode, duplicates }
 
 // ============== Helpers ==============
 function showStatus(msg, type){
@@ -350,7 +346,6 @@ async function handleFile(file){
     
     parsedData = rows;
     csvContent = buildCSV(rows);
-    costData = buildCostData(rows);
     renderResults(rows);
     showStatus(`✅ Uspješno! Pronađeno <strong>${rows.length}</strong> proizvoda`, 'success');
   } catch(err){
@@ -515,31 +510,6 @@ function buildCSV(rows){
   return csv;
 }
 
-// ============== Build nabavne cijene payload (admin-only, → nabavne_cijene) ==============
-// Iz parsiranih redova izvlači SAMO nabavnu (giriš) cijenu, keyed by barkod.
-// Pravila: preskoči cijena 0,00; preskoči redove bez barkoda; duplikati = last-wins (broji ih).
-function buildCostData(rows){
-  const result = { records: [], skippedZero: 0, skippedNoBarcode: 0, duplicates: 0 };
-  const nowIso = new Date().toISOString();
-  const map = new Map(); // barkod -> {barcode, nabavna, updatedAt}
-
-  for(const r of rows){
-    const barcode = (r.barkod || '').trim();
-    const nabavna = parseEUNum(r.cijena) || 0;
-
-    // Cijena 0,00 → nema nabavne, preskoči
-    if(nabavna === 0){ result.skippedZero++; continue; }
-    // Nema barkoda (red počinje šifrom) → ne može biti keyed, preskoči
-    if(!barcode){ result.skippedNoBarcode++; continue; }
-
-    if(map.has(barcode)) result.duplicates++;  // last-wins, ali broji
-    map.set(barcode, { barcode, nabavna, updatedAt: nowIso });
-  }
-
-  result.records = Array.from(map.values());
-  return result;
-}
-
 // ============== Render ==============
 function renderResults(rows){
   $('results').style.display = 'block';
@@ -670,52 +640,9 @@ $('btnSendB2B').addEventListener('click', () => {
   }
 });
 
-// 🔒 Pošalji nabavne (giriš) cijene u B2B → kolekcija nabavne_cijene (admin-only)
-$('btnSendNabavne').addEventListener('click', () => {
-  if(!costData || costData.records.length === 0){
-    showStatus('❌ Nema nabavnih cijena za slanje (sve preskočeno ili nema podataka)', 'error');
-    return;
-  }
-
-  const { records, skippedZero, skippedNoBarcode, duplicates } = costData;
-
-  // Sažetak prije slanja
-  let summary = `🔒 Šaljem nabavne cijene u B2B:<br>`;
-  summary += `• <strong>${records.length}</strong> proizvoda sa nabavnom cijenom<br>`;
-  summary += `• ${skippedZero} preskočeno (cijena 0,00)<br>`;
-  summary += `• ${skippedNoBarcode} preskočeno (bez barkoda)`;
-  if(duplicates > 0){
-    summary += `<br>• ${duplicates} duplikatnih barkodova, zadnji korišten`;
-  }
-
-  try {
-    // CSV format (Barkod;Nabavna) — ide kroz isti tools-import rail kao stanje/promet/dugovanja.
-    // updatedAt se NE šalje: B2B strana upisuje serverTimestamp() pri zapisu.
-    // Broj se emituje kao plain decimal (npr. 12.5) — B2B parseBosNum to ispravno čita.
-    let csv = 'Barkod;Nabavna\n';
-    for(const r of records){
-      csv += `${r.barcode};${r.nabavna}\n`;
-    }
-    const encoded = btoa(unescape(encodeURIComponent(csv)));
-
-    if(encoded.length > 1500000){
-      showStatus('⚠️ Podaci su preveliki za direktan transfer. Podijelite PDF na manje dijelove.', 'warn');
-      return;
-    }
-
-    const b2bUrl = 'https://b2b.goldenrose.ba/#import=nabavne_cijene&data=' + encoded;
-    showStatus(summary + '<br><br>📤 Otvaram B2B sistem... Prijavite se kao admin ako niste već.', 'info');
-    window.open(b2bUrl, '_blank');
-  } catch(e) {
-    console.error(e);
-    showStatus('❌ Greška pri pripremi za slanje: ' + e.message, 'error');
-  }
-});
-
 $('btnReset').addEventListener('click', () => {
   parsedData = [];
   csvContent = '';
-  costData = null;
   $('results').style.display = 'none';
   $('empty').style.display = 'block';
   $('status').classList.remove('show');
