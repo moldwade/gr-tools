@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Golden Rose — Shopify ↔ B2B kimlik eşleştirme (Faza 0) · v1.0.3 fix: değişen-alan (EAN veya catNo) -->
+<!-- Golden Rose — Shopify ↔ B2B kimlik eşleştirme (Faza 0) · v1.1 aranabilir grup seçimi (200+ grup) -->
 <html lang="bs">
 <head>
 <meta charset="utf-8">
@@ -120,7 +120,7 @@
 <div class="wrap">
   <header class="top">
     <a href="/" class="backlink">← Golden Rose Tools</a>
-    <div class="eyebrow">Golden Rose · Faza 0 · <b style="color:var(--ink)">v1.0.3</b> · jednostavan tok</div>
+    <div class="eyebrow">Golden Rose · Faza 0 · <b style="color:var(--ink)">v1.1</b> · pretraga grupa</div>
     <h1>Shopify ↔ B2B <em>uparivanje</em></h1>
     <p class="lede">Prvo Shopify proizvod → B2B grupa (jedna odluka), pa broj unutar te grupe. Potvrđeni idu u Shopify import CSV (<b>SKU</b>=catNo, <b>Barcode</b>=EAN). B2B se samo čita.</p>
   </header>
@@ -184,6 +184,7 @@
     </div>
   </section>
 
+  <datalist id="grpList"></datalist>
   <div id="list"></div>
 </div>
 
@@ -386,11 +387,27 @@ function matchFamily(fam){
 }
 function runMatch(){
   indexB2b();
+  populateGroupDatalist();
   S.fams.forEach(f=>{ if(!f.outOfScope) assignGroup(f); matchFamily(f); });
   loadDecisions();      // localStorage'dan kayıtlı kararları oku
   applyDecisions();     // üstüne uygula (kalıcı kimliklerle)
   collisionGuard();
   renderAll();
+}
+// arama datalist'i — tüm gruplar (200+ olsa da yazarak bulunur)
+function populateGroupDatalist(){
+  const dl=$('#grpList'); if(!dl) return;
+  const names=S.groupIx.map(g=>g.name).sort((a,b)=>a.localeCompare(b,'bs'));
+  dl.innerHTML=names.map(n=>`<option value="${esc(n)}"></option>`).join('');
+}
+// grup atamasını tek yerden yönet (arama + butonlar + eski select hepsi buraya)
+function setFamGroup(f, target){
+  f.shopifyOnly=false; f.outOfScope=false; f.sealed=false; f.reopened=false;
+  if(target==='sonly'){ f.shopifyOnly=true; f.groupIdx=null; f.groupConfirmed=false; f.manualGroup=false; f.expanded=false; }
+  else if(target==='oos'){ f.outOfScope=true; f.groupIdx=null; f.groupConfirmed=false; f.manualGroup=false; f.expanded=false; }
+  else if(target==null){ f.groupIdx=null; f.groupConfirmed=false; f.manualGroup=false; }   // bez grupe
+  else { f.groupIdx=target; f.groupConfirmed=true; f.manualGroup=true; f.expanded=true; }   // grup index (elle)
+  matchFamily(f); recompute();
 }
 // GÜVENLİK: bir b2b barkodu en fazla 1 Shopify variant'a. Çakışanları export dışı bırak.
 function collisionGuard(){
@@ -559,31 +576,40 @@ function renderList(){
       </div>
       <div class="fam-body">
         <div class="fam-tools">
-          <label>Grupa:
-            <select class="grpsel" data-fi="${fi}">
-              ${grpOptions(f)}
-              <option value="" ${(!g&&!f.shopifyOnly&&!f.outOfScope)?'selected':''}>— bez grupe —</option>
-              <option value="__sonly__" ${f.shopifyOnly?'selected':''}>🚫 nema u B2B (legacy)</option>
-              <option value="__oos__" ${f.outOfScope?'selected':''}>📦 van opsega (nije GR)</option>
-            </select>
+          <label style="flex:1; min-width:180px; display:flex; align-items:center; gap:6px; margin:0">Grupa:
+            <input class="grpsearch" data-fi="${fi}" list="grpList" autocomplete="off" spellcheck="false"
+              placeholder="Traži grupu… (npr. eyeful)"
+              value="${(g&&!f.shopifyOnly&&!f.outOfScope)?esc(g.name):''}"
+              style="flex:1; min-width:0; font:inherit; font-size:12px; padding:6px 8px; border:1px solid var(--line-2); border-radius:8px; background:#fff">
           </label>
-          <button class="doneFam ${decided?'':'primary'}" data-fi="${fi}">${decided?'↩︎ Vrati':'✓ Potvrdi'}</button>
+          <button class="markBtn" data-fi="${fi}" data-act="sonly" title="nema u B2B (legacy)" style="margin-left:0; padding:6px 9px; font-size:13px${f.shopifyOnly?'; background:var(--miss-bg); color:var(--miss); border-color:transparent':''}">🚫</button>
+          <button class="markBtn" data-fi="${fi}" data-act="oos" title="nije Golden Rose" style="margin-left:0; padding:6px 9px; font-size:13px${f.outOfScope?'; background:var(--miss-bg); color:var(--miss); border-color:transparent':''}">📦</button>
+          ${(!f.outOfScope && !f.shopifyOnly) ? `<button class="doneFam ${decided?'':'primary'}" data-fi="${fi}">${decided?'↩︎ Vrati':'✓ Potvrdi'}</button>` : ''}
         </div>
         ${vis.map(rowHTML).join('')}
       </div>
     </div>`;
   });
+  const _scrollY = window.scrollY;   // yeniden çizimde sayfa zıplamasın
   host.innerHTML=banner + (html || `<div class="empty"><div class="big">Nema redova u ovom filteru</div></div>`);
   // expand families that need attention
   host.querySelectorAll('.fam').forEach(el=>{
     const f=S.fams[+el.dataset.fi];
-    if(f.rows.some(r=>rowStatus(r)!=='ready') || S.filter!=='all') el.classList.add('open');
-    el.querySelector('.fam-head').addEventListener('click',e=>{ if(e.target.closest('.fam-tools'))return; el.classList.toggle('open'); });
+    // Açık/kapalı: kullanıcı elle değiştirdiyse onu koru; yoksa varsayılan = karara bağlı DEĞİLSE açık
+    const open = (f.expanded!==undefined) ? f.expanded : (!famDecided(f) && (f.rows.some(r=>rowStatus(r)!=='ready') || S.filter!=='all'));
+    if(open) el.classList.add('open');
+    el.querySelector('.fam-head').addEventListener('click',e=>{
+      if(e.target.closest('.fam-tools'))return;
+      el.classList.toggle('open');
+      f.expanded = el.classList.contains('open');   // kullanıcının tercihini hatırla
+    });
   });
-  host.querySelectorAll('select.grpsel').forEach(sel=>sel.addEventListener('change',onGroupChange));
+  host.querySelectorAll('input.grpsearch').forEach(el=>el.addEventListener('change',onGroupSearch));
+  host.querySelectorAll('button.markBtn').forEach(b=>b.addEventListener('click',onMarkBtn));
   host.querySelectorAll('button.doneFam').forEach(b=>b.addEventListener('click',onProductToggle));
   host.querySelectorAll('select.pick').forEach(sel=>sel.addEventListener('change',onPick));
   renderExportBar();
+  window.scrollTo(0, _scrollY);   // kaydırma pozisyonunu koru
 }
 function grpOptions(f){
   const cur=f.groupIdx;
@@ -644,25 +670,34 @@ function renderExportBar(){
 function renderAll(){ renderStats(); renderList(); }
 
 /* ============ INTERACTIONS ============ */
-function onGroupChange(e){
-  const fi=+e.target.dataset.fi, f=S.fams[fi];
-  const val=e.target.value;
-  if(val==='__sonly__'){ f.shopifyOnly=true; f.outOfScope=false; f.groupIdx=null; f.groupConfirmed=false; f.manualGroup=false; matchFamily(f); recompute(); return; }
-  if(val==='__oos__'){ f.outOfScope=true; f.shopifyOnly=false; f.groupIdx=null; f.groupConfirmed=false; f.manualGroup=false; matchFamily(f); recompute(); return; }
-  f.shopifyOnly=false; f.outOfScope=false;
-  f.groupIdx = val===''?null:+val;
-  f.groupConfirmed = (val!=='');   // kullanıcı seçtiyse onaylı say → numara eşleşmeleri otomatik
-  f.manualGroup = (val!=='');      // elle seçildi → grup içinde katı eşleştir (global gezinme)
-  matchFamily(f); recompute();
+function onGroupSearch(e){
+  const f=S.fams[+e.target.dataset.fi];
+  const v=e.target.value.trim();
+  if(!v){ setFamGroup(f, null); return; }            // boş → bez grupe
+  let gi=groupIdxByName(v);
+  if(gi==null){                                       // büyük/küçük harf toleransı
+    const low=v.toLowerCase();
+    for(let i=0;i<S.groupIx.length;i++){ if(S.groupIx[i].name.toLowerCase()===low){ gi=i; break; } }
+  }
+  if(gi!=null) setFamGroup(f, gi);
+  else renderList();                                   // geçersiz metin → eski değere geri dön
+}
+function onMarkBtn(e){
+  const f=S.fams[+e.target.dataset.fi];
+  const act=e.target.dataset.act;                      // 'sonly' | 'oos'
+  // aynı butona tekrar basılırsa geri al (toggle)
+  if(act==='sonly' && f.shopifyOnly) return setFamGroup(f, null);
+  if(act==='oos' && f.outOfScope)   return setFamGroup(f, null);
+  setFamGroup(f, act);
 }
 // TEK BUTON: karar bekliyorsa "✓ Potvrdi" (önerileri onayla + kapat), bittiyse "↩︎ Vrati" (tekrar aç)
 function onProductToggle(e){
   const f=S.fams[+e.target.dataset.fi];
   if(famDecided(f)){
-    f.sealed=false; f.reopened=true;                 // Vrati: tekrar aç (eşleşmeler korunur)
+    f.sealed=false; f.reopened=true; f.expanded=true;   // Vrati: tekrar aç (eşleşmeler korunur)
   } else {
     f.rows.forEach(r=>{ if(r.b2bId!=null){ r.confirmed=true; r.userPicked=true; } }); // önerileri onayla
-    f.sealed=true; f.reopened=false;                 // ve kapat
+    f.sealed=true; f.reopened=false; f.expanded=false;  // ve kapat
   }
   recompute();
 }
