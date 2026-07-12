@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Golden Rose — Shopify ↔ B2B kimlik eşleştirme (Faza 0) · v0.9 lokalizacija BS + link nazad -->
+<!-- Golden Rose — Shopify ↔ B2B kimlik eşleştirme (Faza 0) · v1.0 jedno dugme Potvrdi/Vrati -->
 <html lang="bs">
 <head>
 <meta charset="utf-8">
@@ -82,6 +82,8 @@
   select.grpsel,select.pick{font:inherit; font-size:12px; padding:6px 8px; border:1px solid var(--line-2); border-radius:8px; max-width:100%; background:#fff}
   select.grpsel{min-width:200px; font-weight:600}
   .fam-tools button{padding:6px 11px; font-size:12px; margin-left:auto}
+  .doneFam.primary{background:var(--ok); border-color:var(--ok); color:#fff; font-weight:700}
+  .doneFam.primary:hover{background:#26794f; border-color:#26794f; color:#fff}
 
   .vrow{display:grid; grid-template-columns:1fr auto 1.2fr; align-items:center; gap:10px; padding:11px 16px; border-top:1px solid var(--line)}
   .vrow:first-child{border-top:none}
@@ -118,7 +120,7 @@
 <div class="wrap">
   <header class="top">
     <a href="/" class="backlink">← Golden Rose Tools</a>
-    <div class="eyebrow">Golden Rose · Faza 0 · <b style="color:var(--ink)">v0.9</b> · Shopify ↔ B2B uparivanje</div>
+    <div class="eyebrow">Golden Rose · Faza 0 · <b style="color:var(--ink)">v1.0</b> · jednostavan tok</div>
     <h1>Shopify ↔ B2B <em>uparivanje</em></h1>
     <p class="lede">Prvo Shopify proizvod → B2B grupa (jedna odluka), pa broj unutar te grupe. Potvrđeni idu u Shopify import CSV (<b>SKU</b>=catNo, <b>Barcode</b>=EAN). B2B se samo čita.</p>
   </header>
@@ -452,7 +454,7 @@ function applyDecisions(){
 function resetDecisions(){
   if(!confirm('Obrisati sve sačuvane odluke? Ovo se ne može poništiti.')) return;
   try{ localStorage.removeItem(LS_KEY); }catch(e){}
-  S.saved={}; S.fams.forEach(f=>{ f.outOfScope=!!(f.vendor && !/golden\s*rose/i.test(f.vendor)); f.shopifyOnly=false; f.sealed=false; f.manualGroup=false; });
+  S.saved={}; S.fams.forEach(f=>{ f.outOfScope=!!(f.vendor && !/golden\s*rose/i.test(f.vendor)); f.shopifyOnly=false; f.sealed=false; f.manualGroup=false; f.reopened=false; });
   runMatch();
 }
 
@@ -460,6 +462,7 @@ function resetDecisions(){
 function famDecided(f){
   if(f.outOfScope) return true;
   if(f.shopifyOnly) return true;
+  if(f.reopened) return false;                 // "Vrati" ile tekrar açıldı → karar bekliyor
   if(f.sealed) return true;
   return f.groupConfirmed && f.rows.length>0 && f.rows.every(r=>rowStatus(r)==='ready');
 }
@@ -518,6 +521,12 @@ function renderList(){
       Prvo učitaj B2B izvor, pa Shopify CSV. Za brzi pregled <b>Demo (Silky Shine)</b>.</div>`;
     $('#exportbar').classList.remove('show'); return;
   }
+  const banner='<div style="background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin:12px 0; font-size:13px; color:var(--ink-soft); line-height:1.7">'
+    +'<b style="color:var(--ink)">Kako raditi:</b> Pogledaj imena proizvoda i prijedloge. '
+    +'Ako se <b>poklapaju</b> → <span style="color:var(--ok); font-weight:700">✓ Potvrdi</span>. '
+    +'Ako je <b>grupa pogrešna</b> → odaberi tačnu grupu, pa Potvrdi. '
+    +'Ako proizvod <b>nije Golden Rose</b> ili ga <b>nema u B2B</b> → označi to u padajućem meniju. '
+    +'Sve se automatski čuva.</div>';
   let html='';
   S.fams.forEach((f,fi)=>{
     if(S.onlyPending && famDecided(f)) return;         // "sadece karar bekleyen" → biten ürünleri gizle
@@ -558,14 +567,13 @@ function renderList(){
               <option value="__oos__" ${f.outOfScope?'selected':''}>📦 van opsega (nije GR)</option>
             </select>
           </label>
-          <button class="approveFam" data-fi="${fi}" ${nApprovable?'':'disabled'}>✓ Potvrdi prijedloge${nApprovable?` (${nApprovable})`:''}</button>
-          <button class="sealFam" data-fi="${fi}" style="margin-left:0">${f.sealed?'↩︎ ukloni oznaku':'✓ Proizvod gotov'}</button>
+          <button class="doneFam ${decided?'':'primary'}" data-fi="${fi}">${decided?'↩︎ Vrati':'✓ Potvrdi'}</button>
         </div>
         ${vis.map(rowHTML).join('')}
       </div>
     </div>`;
   });
-  host.innerHTML=html || `<div class="empty"><div class="big">Nema redova u ovom filteru</div></div>`;
+  host.innerHTML=banner + (html || `<div class="empty"><div class="big">Nema redova u ovom filteru</div></div>`);
   // expand families that need attention
   host.querySelectorAll('.fam').forEach(el=>{
     const f=S.fams[+el.dataset.fi];
@@ -573,8 +581,7 @@ function renderList(){
     el.querySelector('.fam-head').addEventListener('click',e=>{ if(e.target.closest('.fam-tools'))return; el.classList.toggle('open'); });
   });
   host.querySelectorAll('select.grpsel').forEach(sel=>sel.addEventListener('change',onGroupChange));
-  host.querySelectorAll('button.approveFam').forEach(b=>b.addEventListener('click',onApproveFam));
-  host.querySelectorAll('button.sealFam').forEach(b=>b.addEventListener('click',onSealFam));
+  host.querySelectorAll('button.doneFam').forEach(b=>b.addEventListener('click',onProductToggle));
   host.querySelectorAll('select.pick').forEach(sel=>sel.addEventListener('change',onPick));
   renderExportBar();
 }
@@ -648,14 +655,15 @@ function onGroupChange(e){
   f.manualGroup = (val!=='');      // elle seçildi → grup içinde katı eşleştir (global gezinme)
   matchFamily(f); recompute();
 }
-function onApproveFam(e){
+// TEK BUTON: karar bekliyorsa "✓ Potvrdi" (önerileri onayla + kapat), bittiyse "↩︎ Vrati" (tekrar aç)
+function onProductToggle(e){
   const f=S.fams[+e.target.dataset.fi];
-  f.rows.forEach(r=>{ if(r.b2bId!=null){ r.confirmed=true; r.userPicked=true; } });
-  recompute();
-}
-function onSealFam(e){
-  const f=S.fams[+e.target.dataset.fi];
-  f.sealed=!f.sealed;   // toggle "tamam" mührü
+  if(famDecided(f)){
+    f.sealed=false; f.reopened=true;                 // Vrati: tekrar aç (eşleşmeler korunur)
+  } else {
+    f.rows.forEach(r=>{ if(r.b2bId!=null){ r.confirmed=true; r.userPicked=true; } }); // önerileri onayla
+    f.sealed=true; f.reopened=false;                 // ve kapat
+  }
   recompute();
 }
 function onPick(e){
