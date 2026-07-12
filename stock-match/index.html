@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Golden Rose — Shopify ↔ B2B kimlik eşleştirme (Faza 0) · v1.0.2 fix: sadece-değişeni-onayla + byCat invalidation -->
+<!-- Golden Rose — Shopify ↔ B2B kimlik eşleştirme (Faza 0) · v1.0.3 fix: değişen-alan (EAN veya catNo) -->
 <html lang="bs">
 <head>
 <meta charset="utf-8">
@@ -120,7 +120,7 @@
 <div class="wrap">
   <header class="top">
     <a href="/" class="backlink">← Golden Rose Tools</a>
-    <div class="eyebrow">Golden Rose · Faza 0 · <b style="color:var(--ink)">v1.0.2</b> · jednostavan tok</div>
+    <div class="eyebrow">Golden Rose · Faza 0 · <b style="color:var(--ink)">v1.0.3</b> · jednostavan tok</div>
     <h1>Shopify ↔ B2B <em>uparivanje</em></h1>
     <p class="lede">Prvo Shopify proizvod → B2B grupa (jedna odluka), pa broj unutar te grupe. Potvrđeni idu u Shopify import CSV (<b>SKU</b>=catNo, <b>Barcode</b>=EAN). B2B se samo čita.</p>
   </header>
@@ -885,21 +885,23 @@ function applyFill(objs){
     const cno=String(o['catNo']||'').trim();
     const origEan=String(o['OrigEAN']||'').trim();
     const origCat=String(o['OrigCatNo']||'').trim();
-    if(ean){
+    const eanChanged = ean!==origEan;
+    const catChanged = cno!==origCat;
+    if(eanChanged && ean){
+      // EAN elle değiştirildi → EAN ile çöz. Geçersizse notfound bırak, SESSIZCE catNo'ya düşme.
       const i=S.byBC[ean];
       if(i==null){ notfound++; continue; }
-      if(ean!==origEan){ r.b2bId=i; r.confirmed=true; r.userPicked=true; applied++; }   // SADECE elle değiştirilen
-      else { skipped++; }                                                                 // dokunulmamış tahmin → bırak
-    } else if(cno){
+      r.b2bId=i; r.confirmed=true; r.userPicked=true; applied++;
+    } else if(catChanged && cno){
+      // yalnızca catNo değiştirildi → catNo ile çöz
       const i=cat[cno];
       if(i==null){ notfound++; continue; }
-      if(cno!==origCat){ r.b2bId=i; r.confirmed=true; r.userPicked=true; applied++; }
-      else { skipped++; }
+      r.b2bId=i; r.confirmed=true; r.userPicked=true; applied++;
+    } else if(!ean && !cno && (origEan||origCat)){
+      // kullanıcı tahmini tamamen sildi → eşleşmeyi kaldır
+      if(r.b2bId!=null||r.confirmed||r.userPicked){ r.b2bId=null; r.confirmed=false; r.userPicked=false; cleared++; }
     } else {
-      // EAN+catNo boş: eğer orijinalde tahmin VARDI ve kullanıcı sildiyse → eşleşmeyi kaldır (aksi halde dokunma)
-      const hadGuess = origEan || origCat;
-      if(hadGuess && (r.b2bId!=null||r.confirmed||r.userPicked)){ r.b2bId=null; r.confirmed=false; r.userPicked=false; cleared++; }
-      else skipped++;
+      skipped++;   // hiçbir alan değişmedi → dokunma
     }
   }
   recompute();
