@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Golden Rose — Shopify ↔ B2B kimlik eşleştirme (Faz 0) · v0.7 vendor kapsam + aile sınıflandırma + aile-CSV -->
+<!-- Golden Rose — Shopify ↔ B2B kimlik eşleştirme (Faza 0) · v0.9 lokalizacija BS + link nazad -->
 <html lang="bs">
 <head>
 <meta charset="utf-8">
@@ -21,6 +21,8 @@
     -webkit-font-smoothing:antialiased; padding-bottom:120px}
   .wrap{max-width:880px; margin:0 auto; padding:0 18px}
   header.top{padding:30px 0 18px}
+  .backlink{display:inline-block; margin-bottom:14px; font-size:13px; font-weight:600; color:var(--ink-soft); text-decoration:none; transition:.15s}
+  .backlink:hover{color:var(--rose-deep)}
   .eyebrow{font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--rose); font-weight:700}
   h1{font-family:Georgia,"Times New Roman",serif; font-weight:600; font-size:27px; margin:6px 0 4px; letter-spacing:-.01em}
   h1 em{font-style:italic; color:var(--rose-deep)}
@@ -58,6 +60,8 @@
   .dot.ready{background:var(--ok)} .dot.pending{background:var(--review)} .dot.miss{background:var(--miss)}
 
   .fam{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); margin:12px 0; overflow:hidden}
+  .fam.decided{opacity:.62} .fam.decided:hover{opacity:1}
+  .fam.decided .fam-head{background:var(--ok-bg)}
   .fam-head{padding:13px 16px; display:flex; align-items:center; gap:12px; cursor:pointer; user-select:none}
   .fam-head:hover{background:#fcf9fa}
   .fam-title{font-weight:700; font-size:15px}
@@ -113,16 +117,17 @@
 <body>
 <div class="wrap">
   <header class="top">
-    <div class="eyebrow">Golden Rose · Faz 0 · <b style="color:var(--ink)">v0.7</b> · vendor kapsam + aile sınıfı</div>
-    <h1>Shopify ↔ B2B <em>kimlik eşleştirme</em></h1>
-    <p class="lede">Önce Shopify ürünü → b2b grubu (bir karar), sonra numara o grubun içinde. Onaylananlar Shopify import CSV'sine (<b>SKU</b>=catNo, <b>Barcode</b>=EAN) yazılır. B2B yalnızca okunur.</p>
+    <a href="/" class="backlink">← Golden Rose Tools</a>
+    <div class="eyebrow">Golden Rose · Faza 0 · <b style="color:var(--ink)">v0.9</b> · Shopify ↔ B2B uparivanje</div>
+    <h1>Shopify ↔ B2B <em>uparivanje</em></h1>
+    <p class="lede">Prvo Shopify proizvod → B2B grupa (jedna odluka), pa broj unutar te grupe. Potvrđeni idu u Shopify import CSV (<b>SKU</b>=catNo, <b>Barcode</b>=EAN). B2B se samo čita.</p>
   </header>
 
   <section class="panel">
-    <h2><span class="step-no">1</span> B2B kaynağı</h2>
+    <h2><span class="step-no">1</span> B2B izvor</h2>
     <div class="src-row">
-      <button id="btnLogin">🔴 Firebase'e giriş (canlı)</button>
-      <label class="btn">📁 JSON yükle<input type="file" id="b2bFile" accept=".json,application/json"></label>
+      <button id="btnLogin">🔴 Prijava na Firebase (uživo)</button>
+      <label class="btn">📁 Učitaj JSON<input type="file" id="b2bFile" accept=".json,application/json"></label>
       <button id="btnDemo" class="ghost">▶️ Demo (Silky Shine)</button>
     </div>
     <div class="login" id="loginForm">
@@ -130,33 +135,50 @@
       <input type="password" id="pass" placeholder="šifra" autocomplete="current-password">
       <button class="primary" id="btnDoLogin">Učitaj</button>
     </div>
-    <div class="status" id="b2bStatus">Henüz yüklenmedi.</div>
+    <div class="status" id="b2bStatus">Još nije učitano.</div>
   </section>
 
   <section class="panel">
-    <h2><span class="step-no">2</span> Shopify ürün export'u</h2>
+    <h2><span class="step-no">2</span> Shopify export proizvoda</h2>
     <div class="src-row">
-      <label class="btn">📄 CSV yükle<input type="file" id="shopFile" accept=".csv,text/csv"></label>
+      <label class="btn">📄 Učitaj CSV<input type="file" id="shopFile" accept=".csv,text/csv"></label>
       <span class="status" id="shopStatus" style="margin:0; align-self:center">Admin → Products → Export → Plain CSV.</span>
     </div>
   </section>
 
   <section class="panel" id="matchPanel" style="display:none">
-    <h2><span class="step-no">3</span> Eşleştirme</h2>
+    <h2><span class="step-no">3</span> Uparivanje</h2>
+    <div id="progWrap" style="margin-bottom:14px">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; font-size:13px; margin-bottom:6px">
+        <span><b id="progDone">0</b> / <span id="progTotal">0</span> proizvoda riješeno <span id="progPct" style="color:var(--ink-soft)"></span></span>
+        <span id="saveMsg" style="font-size:11px; color:var(--ok)"></span>
+      </div>
+      <div style="height:8px; background:var(--line); border-radius:99px; overflow:hidden">
+        <div id="progBar" style="height:100%; width:0%; background:var(--ok); transition:width .3s"></div>
+      </div>
+      <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft); margin-top:8px; cursor:pointer">
+        <input type="checkbox" id="onlyPending"> Samo proizvodi koji čekaju odluku
+      </label>
+      <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px">
+        <button id="btnProgSave" class="ghost" style="font-size:11px; padding:5px 9px">⬇︎ Sačuvaj napredak (JSON)</button>
+        <label class="btn ghost" style="font-size:11px; padding:5px 9px">⬆︎ Učitaj napredak<input type="file" id="progFile" accept=".json,application/json"></label>
+        <button id="btnProgReset" class="ghost" style="font-size:11px; padding:5px 9px; border-color:var(--miss); color:var(--miss)">🗑 Poništi odluke</button>
+      </div>
+    </div>
     <div class="stats">
-      <div class="stat"><div class="n" id="sTot">0</div><div class="l">variant</div></div>
-      <div class="stat ready"><div class="n" id="sReady">0</div><div class="l">onaylı</div></div>
-      <div class="stat pending"><div class="n" id="sPending">0</div><div class="l">bekleyen</div></div>
-      <div class="stat miss"><div class="n" id="sMiss">0</div><div class="l">eşleşmeyen</div></div>
+      <div class="stat"><div class="n" id="sTot">0</div><div class="l">varijanti</div></div>
+      <div class="stat ready"><div class="n" id="sReady">0</div><div class="l">potvrđeno</div></div>
+      <div class="stat pending"><div class="n" id="sPending">0</div><div class="l">čeka</div></div>
+      <div class="stat miss"><div class="n" id="sMiss">0</div><div class="l">neupareno</div></div>
     </div>
     <div id="collWarn" style="display:none; margin-top:10px; padding:10px 12px; border-radius:10px; background:var(--miss-bg); color:var(--miss); font-size:13px"></div>
     <div class="tabs" id="tabs">
-      <div class="tab active" data-f="all">Tümü</div>
-      <div class="tab" data-f="ready"><span class="dot ready"></span>Onaylı</div>
-      <div class="tab" data-f="pending"><span class="dot pending"></span>Bekleyen</div>
-      <div class="tab" data-f="miss"><span class="dot miss"></span>Eşleşmeyen</div>
-      <div class="tab" data-f="sonly">🚫 b2b-yok<span id="sonlyTabN"></span></div>
-      <div class="tab" data-f="oos">📦 kapsam-dışı<span id="oosTabN"></span></div>
+      <div class="tab active" data-f="all">Sve</div>
+      <div class="tab" data-f="ready"><span class="dot ready"></span>Potvrđeno</div>
+      <div class="tab" data-f="pending"><span class="dot pending"></span>Čeka</div>
+      <div class="tab" data-f="miss"><span class="dot miss"></span>Neupareno</div>
+      <div class="tab" data-f="sonly">🚫 nema u B2B<span id="sonlyTabN"></span></div>
+      <div class="tab" data-f="oos">📦 van opsega<span id="oosTabN"></span></div>
     </div>
   </section>
 
@@ -165,17 +187,17 @@
 
 <div class="exportbar" id="exportbar">
   <div class="wrap">
-    <div class="summary"><b id="exCount">0</b> onaylı hazır · <span id="fillMsg" style="color:var(--ink-soft)"></span></div>
-    <label class="btn">⬆︎ Doldurulmuş CSV<input type="file" id="fillFile" accept=".csv,text/csv"></label>
-    <button id="btnExportFam">⬇︎ Aile-özeti CSV</button>
-    <button id="btnExportWork">⬇︎ Çalışma CSV'si (<span id="expTab">tümü</span>)</button>
+    <div class="summary"><b id="exCount">0</b> potvrđeno spremno · <span id="fillMsg" style="color:var(--ink-soft)"></span></div>
+    <label class="btn">⬆︎ Popunjeni CSV<input type="file" id="fillFile" accept=".csv,text/csv"></label>
+    <button id="btnExportFam">⬇︎ Sažetak proizvoda CSV</button>
+    <button id="btnExportWork">⬇︎ Radni CSV (<span id="expTab">tümü</span>)</button>
     <button id="btnExportCsv" class="primary">⬇︎ Shopify import CSV</button>
   </div>
 </div>
 
 <script>
 /* ============ STATE ============ */
-const S = { b2b:[], groups:[], groupIx:[], byBC:{}, byNum:{}, fams:[], filter:'all' };
+const S = { b2b:[], groups:[], groupIx:[], byBC:{}, byNum:{}, fams:[], filter:'all', onlyPending:false, saved:{}, lsOK:true };
 const $ = s => document.querySelector(s);
 
 /* ============ NORMALIZE (b2b'den) ============ */
@@ -363,6 +385,8 @@ function matchFamily(fam){
 function runMatch(){
   indexB2b();
   S.fams.forEach(f=>{ if(!f.outOfScope) assignGroup(f); matchFamily(f); });
+  loadDecisions();      // localStorage'dan kayıtlı kararları oku
+  applyDecisions();     // üstüne uygula (kalıcı kimliklerle)
   collisionGuard();
   renderAll();
 }
@@ -377,7 +401,73 @@ function collisionGuard(){
   }
 }
 // veri değişince: guard + yeniden çiz
-function recompute(){ collisionGuard(); renderAll(); }
+function recompute(){ collisionGuard(); saveDecisions(); renderAll(); }
+
+/* ============ AUTO-SAVE (localStorage, kalıcı kimlikler) ============ */
+const LS_KEY='grStokMatch:decisions:v1';
+function lsGet(){ try{ return localStorage.getItem(LS_KEY); }catch(e){ S.lsOK=false; return null; } }
+function lsSet(v){ try{ localStorage.setItem(LS_KEY,v); return true; }catch(e){ S.lsOK=false; return false; } }
+function loadDecisions(){
+  const raw=lsGet(); if(!raw){ S.saved={}; return; }
+  try{ S.saved=JSON.parse(raw)||{}; }catch(e){ S.saved={}; }
+}
+function serializeDecisions(){
+  const out={};
+  S.fams.forEach(f=>{
+    const g = f.groupIdx!=null ? S.groupIx[f.groupIdx].name : null;
+    // sadece anlamlı kararları kaydet (dokunulmuş olanlar)
+    const overrides={};
+    (f.rows||[]).forEach(r=>{ if(r.b2bId!=null && (r.userPicked)) overrides[r.option]=S.b2b[r.b2bId].barcode; });
+    const touched = f.outOfScope || f.shopifyOnly || f.sealed || f.manualGroup || Object.keys(overrides).length;
+    if(!touched) return;
+    out[f.handle]={ group:g, confirmed:!!f.groupConfirmed, manual:!!f.manualGroup,
+      legacy:!!f.shopifyOnly, oos:!!f.outOfScope, sealed:!!f.sealed, overrides };
+  });
+  return out;
+}
+function saveDecisions(){
+  if(!S.lsOK) return;
+  const ok=lsSet(JSON.stringify(serializeDecisions()));
+  const el=$('#saveMsg'); if(el) el.textContent = ok ? 'sačuvano ✓' : 'auto-save isključen';
+}
+function groupIdxByName(name){
+  if(name==null) return null;
+  for(let i=0;i<S.groupIx.length;i++) if(S.groupIx[i].name===name) return i;
+  return null;
+}
+function applyDecisions(){
+  const anyLS = S.saved && Object.keys(S.saved).length;
+  if(!anyLS) return;
+  S.fams.forEach(f=>{
+    const d=S.saved[f.handle]; if(!d) return;
+    if(d.oos){ f.outOfScope=true; matchFamily(f); return; }
+    if(d.legacy){ f.shopifyOnly=true; matchFamily(f); return; }
+    if(d.group){ const gi=groupIdxByName(d.group); if(gi!=null){ f.groupIdx=gi; f.groupConfirmed=d.confirmed!==false; f.manualGroup=!!d.manual; } }
+    f.sealed=!!d.sealed;
+    matchFamily(f);
+    // variant elle seçimleri (EAN ile)
+    if(d.overrides) f.rows.forEach(r=>{ const bc=d.overrides[r.option]; if(bc && S.byBC[bc]!=null){ r.b2bId=S.byBC[bc]; r.confirmed=true; r.userPicked=true; } });
+  });
+}
+function resetDecisions(){
+  if(!confirm('Obrisati sve sačuvane odluke? Ovo se ne može poništiti.')) return;
+  try{ localStorage.removeItem(LS_KEY); }catch(e){}
+  S.saved={}; S.fams.forEach(f=>{ f.outOfScope=!!(f.vendor && !/golden\s*rose/i.test(f.vendor)); f.shopifyOnly=false; f.sealed=false; f.manualGroup=false; });
+  runMatch();
+}
+
+/* ============ İLERLEME ============ */
+function famDecided(f){
+  if(f.outOfScope) return true;
+  if(f.shopifyOnly) return true;
+  if(f.sealed) return true;
+  return f.groupConfirmed && f.rows.length>0 && f.rows.every(r=>rowStatus(r)==='ready');
+}
+function progress(){
+  const scope=S.fams.filter(f=>!f.outOfScope);      // GR ürünleri
+  const done=scope.filter(famDecided).length;
+  return { done, total:scope.length };
+}
 
 /* ============ STATUS ============ */
 function rowStatus(r){
@@ -389,11 +479,11 @@ function rowStatus(r){
 }
 // aile sınıfı (ChatGPT sınıflandırması): türetilmiş
 function classifyFam(f){
-  if(f.outOfScope) return 'kapsam-dışı';
-  if(f.shopifyOnly) return 'b2b-yok(legacy)';
-  if(f.groupIdx==null) return 'eşleşmedi(elle-map?)';
-  if(f.groupConfirmed) return f.manualGroup?'onaylı-grup(elle)':'onaylı-grup(oto)';
-  return 'aday-grup';
+  if(f.outOfScope) return 'van-opsega';
+  if(f.shopifyOnly) return 'nema-u-B2B(legacy)';
+  if(f.groupIdx==null) return 'nespojeno(ručno?)';
+  if(f.groupConfirmed) return f.manualGroup?'potvrđena-grupa(ručno)':'potvrđena-grupa(auto)';
+  return 'grupa-kandidat';
 }
 function allRows(){ return S.fams.flatMap(f=>f.rows); }
 
@@ -406,44 +496,52 @@ function renderStats(){
   const cw=$('#collWarn');
   if(cw){
     let m='';
-    if(S.collisions>0) m+=`⚠ <b>${S.collisions}</b> satır çakışma — export dışı, "Bekleyen"de <b>çakışma(aynı-EAN)</b>. `;
-    if(c.sonly>0) m+=`🚫 <b>${c.sonly}</b> satır b2b-yok (senkron dışı). `;
-    if(c.oos>0) m+=`📦 <b>${c.oos}</b> satır kapsam-dışı (GR-dışı vendor). `;
+    if(S.collisions>0) m+=`⚠ <b>${S.collisions}</b> redova konflikt — van izvoza, u "Čeka" kao <b>konflikt(isti-EAN)</b>. `;
+    if(c.sonly>0) m+=`🚫 <b>${c.sonly}</b> redova nema u B2B (bez sinhronizacije). `;
+    if(c.oos>0) m+=`📦 <b>${c.oos}</b> redova van opsega (nije GR vendor). `;
     cw.style.display = m?'':'none'; cw.innerHTML=m;
   }
   const st=$('#sonlyTabN'); if(st) st.textContent=c.sonly?` (${c.sonly})`:'';
   const ot=$('#oosTabN'); if(ot) ot.textContent=c.oos?` (${c.oos})`:'';
+  // ilerleme
+  const pr=progress();
+  const pb=$('#progBar'); if(pb) pb.style.width=(pr.total?Math.round(pr.done/pr.total*100):0)+'%';
+  const pd=$('#progDone'); if(pd) pd.textContent=pr.done;
+  const pt=$('#progTotal'); if(pt) pt.textContent=pr.total;
+  const pp=$('#progPct'); if(pp) pp.textContent=pr.total?`(%${Math.round(pr.done/pr.total*100)})`:'';
   $('#matchPanel').style.display=rows.length?'':'none';
 }
 function renderList(){
   const host=$('#list');
   if(!allRows().length){
-    host.innerHTML=`<div class="empty"><div class="big">Henüz eşleştirme yok</div>
-      Önce b2b kaynağını, sonra Shopify CSV'sini yükle. Hızlı bakmak için <b>Demo (Silky Shine)</b>.</div>`;
+    host.innerHTML=`<div class="empty"><div class="big">Još nema uparivanja</div>
+      Prvo učitaj B2B izvor, pa Shopify CSV. Za brzi pregled <b>Demo (Silky Shine)</b>.</div>`;
     $('#exportbar').classList.remove('show'); return;
   }
   let html='';
   S.fams.forEach((f,fi)=>{
+    if(S.onlyPending && famDecided(f)) return;         // "sadece karar bekleyen" → biten ürünleri gizle
     const vis=f.rows.filter(r=> S.filter==='all' || rowStatus(r)===S.filter);
     if(!vis.length) return;
+    const decided=famDecided(f);
     const c={ready:0,pending:0,miss:0,sonly:0,oos:0}; f.rows.forEach(r=>c[rowStatus(r)]++);
     const g = f.groupIdx!=null ? S.groupIx[f.groupIdx] : null;
-    const gLabel = f.outOfScope ? `<span class="none">📦 kapsam-dışı (${esc(f.vendor||'GR değil')})</span>`
-      : f.shopifyOnly ? '<span class="none">🚫 b2b\'de yok (senkron dışı)</span>'
-      : g ? `→ ${esc(g.name)} <span style="color:var(--ink-soft)">(${Math.round(f.groupScore*100)}%${f.groupConfirmed?(f.manualGroup?' · elle':''):' · seç'})</span>`
-      : '<span class="none">grup seçilmedi</span>';
+    const gLabel = f.outOfScope ? `<span class="none">📦 van opsega (${esc(f.vendor||'nije GR')})</span>`
+      : f.shopifyOnly ? '<span class="none">🚫 nema u B2B (bez sinhronizacije)</span>'
+      : g ? `→ ${esc(g.name)} <span style="color:var(--ink-soft)">(${Math.round(f.groupScore*100)}%${f.groupConfirmed?(f.manualGroup?' · ručno':''):' · odaberi'})</span>`
+      : '<span class="none">grupa nije odabrana</span>';
     const nApprovable=f.rows.filter(r=>!r.confirmed && r.b2bId!=null).length;
-    html+=`<div class="fam" data-fi="${fi}">
+    html+=`<div class="fam${decided?' decided':''}" data-fi="${fi}">
       <div class="fam-head">
         <div style="min-width:0">
-          <div class="fam-title">${esc(f.title)}</div>
-          <div class="fam-sub">${f.rows.length} variant · <span class="g ${(g&&!f.shopifyOnly&&!f.outOfScope)?'':'none'}">${gLabel}</span></div>
+          <div class="fam-title">${decided?'<span style="color:var(--ok)">✓</span> ':''}${esc(f.title)}</div>
+          <div class="fam-sub">${f.rows.length} varijanti · <span class="g ${(g&&!f.shopifyOnly&&!f.outOfScope)?'':'none'}">${gLabel}</span></div>
         </div>
         <div class="fam-arrow">
           <div class="fam-badges">
-            ${c.ready?`<span class="mini ready">${c.ready} onaylı</span>`:''}
-            ${c.pending?`<span class="mini pending">${c.pending} bekleyen</span>`:''}
-            ${c.miss?`<span class="mini miss">${c.miss} yok</span>`:''}
+            ${c.ready?`<span class="mini ready">${c.ready} potvrđeno</span>`:''}
+            ${c.pending?`<span class="mini pending">${c.pending} čeka</span>`:''}
+            ${c.miss?`<span class="mini miss">${c.miss} nema</span>`:''}
             ${c.sonly?`<span class="mini miss">🚫 ${c.sonly}</span>`:''}
             ${c.oos?`<span class="mini miss">📦 ${c.oos}</span>`:''}
           </div>
@@ -452,21 +550,22 @@ function renderList(){
       </div>
       <div class="fam-body">
         <div class="fam-tools">
-          <label>Grup:
+          <label>Grupa:
             <select class="grpsel" data-fi="${fi}">
               ${grpOptions(f)}
-              <option value="" ${(!g&&!f.shopifyOnly&&!f.outOfScope)?'selected':''}>— grup yok —</option>
-              <option value="__sonly__" ${f.shopifyOnly?'selected':''}>🚫 b2b'de yok (legacy)</option>
-              <option value="__oos__" ${f.outOfScope?'selected':''}>📦 kapsam-dışı (GR değil)</option>
+              <option value="" ${(!g&&!f.shopifyOnly&&!f.outOfScope)?'selected':''}>— bez grupe —</option>
+              <option value="__sonly__" ${f.shopifyOnly?'selected':''}>🚫 nema u B2B (legacy)</option>
+              <option value="__oos__" ${f.outOfScope?'selected':''}>📦 van opsega (nije GR)</option>
             </select>
           </label>
-          <button class="approveFam" data-fi="${fi}" ${nApprovable?'':'disabled'}>✓ Önerileri onayla${nApprovable?` (${nApprovable})`:''}</button>
+          <button class="approveFam" data-fi="${fi}" ${nApprovable?'':'disabled'}>✓ Potvrdi prijedloge${nApprovable?` (${nApprovable})`:''}</button>
+          <button class="sealFam" data-fi="${fi}" style="margin-left:0">${f.sealed?'↩︎ ukloni oznaku':'✓ Proizvod gotov'}</button>
         </div>
         ${vis.map(rowHTML).join('')}
       </div>
     </div>`;
   });
-  host.innerHTML=html || `<div class="empty"><div class="big">Bu filtrede satır yok</div></div>`;
+  host.innerHTML=html || `<div class="empty"><div class="big">Nema redova u ovom filteru</div></div>`;
   // expand families that need attention
   host.querySelectorAll('.fam').forEach(el=>{
     const f=S.fams[+el.dataset.fi];
@@ -475,6 +574,7 @@ function renderList(){
   });
   host.querySelectorAll('select.grpsel').forEach(sel=>sel.addEventListener('change',onGroupChange));
   host.querySelectorAll('button.approveFam').forEach(b=>b.addEventListener('click',onApproveFam));
+  host.querySelectorAll('button.sealFam').forEach(b=>b.addEventListener('click',onSealFam));
   host.querySelectorAll('select.pick').forEach(sel=>sel.addEventListener('change',onPick));
   renderExportBar();
 }
@@ -491,35 +591,35 @@ function rowHTML(r){
   if(st==='oos'){
     return `<div class="vrow">
       <div class="shop side"><div class="nm">${esc(r.option)}</div>
-        <div class="meta">${esc(r.optName||'variant')} · Shopify ${fmt(r.shopPrice)}</div></div>
-      <div class="bridge"><div class="numchip miss">${esc(shade)}</div><div class="badge miss">📦 kapsam-dışı</div></div>
-      <div class="b2b side none"><div class="nm">GR matcher dışı</div>
-        <div class="meta">Golden Rose olmayan vendor — eşleştirilmez</div></div>
+        <div class="meta">${esc(r.optName||'varijanta')} · Shopify ${fmt(r.shopPrice)}</div></div>
+      <div class="bridge"><div class="numchip miss">${esc(shade)}</div><div class="badge miss">📦 van opsega</div></div>
+      <div class="b2b side none"><div class="nm">Van GR uparivanja</div>
+        <div class="meta">Nije Golden Rose vendor — ne uparuje se</div></div>
     </div>`;
   }
   if(st==='sonly'){
     return `<div class="vrow">
       <div class="shop side"><div class="nm">${esc(r.option)}</div>
-        <div class="meta">${esc(r.optName||'variant')} · Shopify ${fmt(r.shopPrice)}</div></div>
-      <div class="bridge"><div class="numchip miss">${esc(shade)}</div><div class="badge miss">🚫 b2b-yok</div></div>
-      <div class="b2b side none"><div class="nm">senkron dışı</div>
-        <div class="meta">b2b'de karşılığı yok — export edilmez</div></div>
+        <div class="meta">${esc(r.optName||'varijanta')} · Shopify ${fmt(r.shopPrice)}</div></div>
+      <div class="bridge"><div class="numchip miss">${esc(shade)}</div><div class="badge miss">🚫 nema u B2B</div></div>
+      <div class="b2b side none"><div class="nm">bez sinhronizacije</div>
+        <div class="meta">nema u B2B — ne izvozi se</div></div>
     </div>`;
   }
-  const badge = r.collision?'⚠ çakışma':st==='ready'?'onaylı':st==='miss'?'yok':(r.b2bId!=null?'öneri':'seç');
+  const badge = r.collision?'⚠ konflikt':st==='ready'?'potvrđeno':st==='miss'?'nema':(r.b2bId!=null?'prijedlog':'odaberi');
   const badgeCls = r.collision?'miss':st;
   const picker = r.opts && r.opts.length ? `<select class="pick" data-vid="${esc(r.vid)}">
-      <option value="">— eşleşme yok —</option>
+      <option value="">— nema uparivanja —</option>
       ${r.opts.map(i=>`<option value="${i}" ${i===r.b2bId?'selected':''}>${esc(S.b2b[i].name)}</option>`).join('')}
     </select>` : '';
   const right = bp
     ? `<div class="b2b side ${r.collision?'none':''}"><div class="nm">${esc(bp.name)}</div>
-         <div class="meta">${r.collision?'⚠ bu EAN başka variant\'a da atandı — ':''}EAN ${esc(bp.barcode)} · stanje ${esc(bp.stock)} · VPC ${fmt(bp.price)}</div>${picker}</div>`
-    : `<div class="b2b side none"><div class="nm">${r.opts&&r.opts.length?'seçim bekliyor':'eşleşme yok'}</div>
-         <div class="meta">${r.num!=null?`"${esc(r.num)}" bu grupta yok`:'numara çıkarılamadı'}</div>${picker}</div>`;
+         <div class="meta">${r.collision?'⚠ ovaj EAN je dodijeljen i drugoj varijanti — ':''}EAN ${esc(bp.barcode)} · stanje ${esc(bp.stock)} · VPC ${fmt(bp.price)}</div>${picker}</div>`
+    : `<div class="b2b side none"><div class="nm">${r.opts&&r.opts.length?'čeka odabir':'nema uparivanja'}</div>
+         <div class="meta">${r.num!=null?`"${esc(r.num)}" nije u ovoj grupi`:'broj se ne može izvući'}</div>${picker}</div>`;
   return `<div class="vrow">
     <div class="shop side"><div class="nm">${esc(r.option)}</div>
-      <div class="meta">${esc(r.optName||'variant')} · Shopify ${fmt(r.shopPrice)}</div></div>
+      <div class="meta">${esc(r.optName||'varijanta')} · Shopify ${fmt(r.shopPrice)}</div></div>
     <div class="bridge">
       <div class="numchip ${st==='miss'?'miss':''}">${esc(shade)}</div>
       <div class="badge ${badgeCls}">${badge}</div>
@@ -530,7 +630,7 @@ function rowHTML(r){
 function renderExportBar(){
   const ok=allRows().filter(r=>r.confirmed && r.b2bId!=null);
   $('#exCount').textContent=ok.length;
-  const labels={all:'tümü',ready:'onaylı',pending:'bekleyen',miss:'eşleşmeyen'};
+  const labels={all:'sve',ready:'potvrđeno',pending:'čeka',miss:'neupareno'};
   const et=$('#expTab'); if(et) et.textContent=labels[S.filter]||'tümü';
   $('#exportbar').classList.toggle('show', allRows().length>0);
 }
@@ -550,7 +650,12 @@ function onGroupChange(e){
 }
 function onApproveFam(e){
   const f=S.fams[+e.target.dataset.fi];
-  f.rows.forEach(r=>{ if(r.b2bId!=null) r.confirmed=true; });
+  f.rows.forEach(r=>{ if(r.b2bId!=null){ r.confirmed=true; r.userPicked=true; } });
+  recompute();
+}
+function onSealFam(e){
+  const f=S.fams[+e.target.dataset.fi];
+  f.sealed=!f.sealed;   // toggle "tamam" mührü
   recompute();
 }
 function onPick(e){
@@ -558,6 +663,7 @@ function onPick(e){
   const r=allRows().find(x=>x.vid===vid); if(!r) return;
   r.b2bId = val===''?null:+val;
   r.confirmed = r.b2bId!=null;
+  r.userPicked = true;
   recompute();
 }
 
@@ -583,17 +689,17 @@ function loadShopFromRows(rows){
   });
   const nv=S.fams.reduce((a,f)=>a+f.variants.length,0);
   const oosN=S.fams.filter(f=>f.outOfScope).length;
-  $('#shopStatus').innerHTML=`<b>${S.fams.length}</b> ürün · <b>${nv}</b> variant${oosN?` · <b>${oosN}</b> kapsam-dışı (GR değil)`:''}.`;
+  $('#shopStatus').innerHTML=`<b>${S.fams.length}</b> proizvoda · <b>${nv}</b> varijanti${oosN?` · <b>${oosN}</b> van opsega (nije GR)`:''}.`;
   $('#shopStatus').className='status ok';
   if(S.b2b.length) runMatch();
 }
 $('#shopFile').addEventListener('change',e=>{
   const file=e.target.files[0]; if(!file) return;
-  $('#shopStatus').textContent='Okunuyor…'; $('#shopStatus').className='status';
+  $('#shopStatus').textContent='Čitanje…'; $('#shopStatus').className='status';
   const fr=new FileReader();
   fr.onload=()=>{ try{ loadShopFromRows(csvToObjects(fr.result)); }
-    catch(err){ $('#shopStatus').textContent='CSV okunamadı: '+err.message; $('#shopStatus').className='status err'; } };
-  fr.onerror=()=>{ $('#shopStatus').textContent='Dosya okunamadı.'; $('#shopStatus').className='status err'; };
+    catch(err){ $('#shopStatus').textContent='CSV se ne može pročitati: '+err.message; $('#shopStatus').className='status err'; } };
+  fr.onerror=()=>{ $('#shopStatus').textContent='Datoteka se ne može pročitati.'; $('#shopStatus').className='status err'; };
   fr.readAsText(file);
 });
 
@@ -602,7 +708,7 @@ function ingestB2b(products, groups){
   S.b2b=products.map(p=>({ name:p.name||'', catNo:p.catNo||'', barcode:String(p.barcode||'').trim(),
     stock:p.stock??'', price:p.price??'', famTokens:famTokens(p.name), num:tailNum(p.name) })).filter(p=>p.barcode);
   S.groups=(groups||[]).map(g=>({name:g.name||'', barcodes:g.barcodes||[]}));
-  $('#b2bStatus').innerHTML=`<b>${S.b2b.length}</b> b2b ürün${S.groups.length?` · ${S.groups.length} grup`:''} yüklendi.`;
+  $('#b2bStatus').innerHTML=`<b>${S.b2b.length}</b> B2B proizvoda${S.groups.length?` · ${S.groups.length} grupa`:''} učitano.`;
   $('#b2bStatus').className='status ok';
   if(S.fams.length) runMatch();
 }
@@ -614,15 +720,15 @@ $('#b2bFile').addEventListener('change',e=>{
     const prods=Array.isArray(j)?j:(j.products||j.PRODS||[]);
     const grps=Array.isArray(j)?[]:(j.groups||j.GRPS||[]);
     ingestB2b(prods,grps);
-  }catch(err){ $('#b2bStatus').textContent='JSON okunamadı: '+err.message; $('#b2bStatus').className='status err'; } };
+  }catch(err){ $('#b2bStatus').textContent='JSON se ne može pročitati: '+err.message; $('#b2bStatus').className='status err'; } };
   fr.readAsText(file);
 });
 $('#btnLogin').addEventListener('click',()=>$('#loginForm').classList.toggle('show'));
 $('#btnDoLogin').addEventListener('click',doFirebaseLoad);
 async function doFirebaseLoad(){
   const email=$('#email').value.trim(), pass=$('#pass').value;
-  if(!email||!pass){ $('#b2bStatus').textContent='Email + šifra gerekli.'; $('#b2bStatus').className='status err'; return; }
-  $('#b2bStatus').textContent='Firebase bağlanıyor…'; $('#b2bStatus').className='status';
+  if(!email||!pass){ $('#b2bStatus').textContent='Email + šifra su obavezni.'; $('#b2bStatus').className='status err'; return; }
+  $('#b2bStatus').textContent='Povezivanje s Firebase…'; $('#b2bStatus').className='status';
   try{
     const [{initializeApp},{getAuth,signInWithEmailAndPassword},{getFirestore,collection,getDocs}]=await Promise.all([
       import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'),
@@ -631,13 +737,13 @@ async function doFirebaseLoad(){
     const app=initializeApp({ apiKey:"AIzaSyCNiBBldrNLCBUJbsR5yZIgNIcfyP2Awm0",
       authDomain:"golden-rose-siparis-562ad.firebaseapp.com", projectId:"golden-rose-siparis-562ad" });
     await signInWithEmailAndPassword(getAuth(app),email,pass);
-    $('#b2bStatus').textContent='Veri çekiliyor…';
+    $('#b2bStatus').textContent='Učitavanje podataka…';
     const db=getFirestore(app);
     const [ps,gs]=await Promise.all([getDocs(collection(db,'products')), getDocs(collection(db,'groups'))]);
     ingestB2b(ps.docs.map(d=>d.data()), gs.docs.map(d=>d.data()));
     $('#loginForm').classList.remove('show'); $('#pass').value='';
   }catch(err){
-    $('#b2bStatus').textContent='Giriş/okuma hatası: '+(err.code||err.message)+' — takılırsa Firebase Console → Authentication → Authorized domains kontrol et.';
+    $('#b2bStatus').textContent='Greška prijave/čitanja: '+(err.code||err.message)+' — ako zapne, provjeri Firebase Console → Authentication → Authorized domains.';
     $('#b2bStatus').className='status err';
   }
 }
@@ -656,19 +762,34 @@ $('#tabs').addEventListener('click',e=>{
   $('#tabs').querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
   t.classList.add('active'); S.filter=t.dataset.f; renderList();
 });
+$('#onlyPending').addEventListener('change',e=>{ S.onlyPending=e.target.checked; renderList(); });
+// ilerleme dosyası (yedek / cihazlar arası)
+$('#btnProgSave').addEventListener('click',()=>{
+  const data=JSON.stringify(serializeDecisions(),null,2);
+  const b=new Blob([data],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='gr-stok-ilerleme.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+});
+$('#progFile').addEventListener('change',e=>{
+  const file=e.target.files[0]; if(!file) return;
+  const fr=new FileReader();
+  fr.onload=()=>{ try{ S.saved=JSON.parse(fr.result)||{}; lsSet(JSON.stringify(S.saved)); runMatch(); }
+    catch(err){ alert('Datoteka napretka se ne može pročitati: '+err.message); } e.target.value=''; };
+  fr.readAsText(file);
+});
+$('#btnProgReset').addEventListener('click',resetDecisions);
 // sebep etiketi — teşhis için
 function dl(name,text){ const b=new Blob(['\ufeff'+text],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1500); }
 function csvCell(v){ v=String(v==null?'':v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
 function reasonOf(r){
-  if(r.outOfScope) return 'kapsam-dışı(GR-değil)';
-  if(r.shopifyOnly) return 'b2b-yok(shopify-only)';
-  if(r.collision) return 'çakışma(aynı-EAN)';
+  if(r.outOfScope) return 'van-opsega(nije-GR)';
+  if(r.shopifyOnly) return 'nema-u-B2B(samo-shopify)';
+  if(r.collision) return 'konflikt(isti-EAN)';
   if(r.confirmed && r.b2bId!=null) return 'onaylı';
-  if(r.b2bId!=null) return 'öneri-onay-bekliyor';
-  if(r.num==null) return 'numara-yok(renk/isim)';
-  if(!r.hasGroup) return 'grup-seçilmedi';
-  return 'numara-grupta-yok';
+  if(r.b2bId!=null) return 'prijedlog-čeka-potvrdu';
+  if(r.num==null) return 'bez-broja(boja/ime)';
+  if(!r.hasGroup) return 'grupa-nije-odabrana';
+  return 'broj-nije-u-grupi';
 }
 function groupNameOf(r){
   const f=S.fams.find(x=>x.handle===r.handle);
@@ -680,7 +801,7 @@ function scopeRows(){
 }
 $('#btnExportWork').addEventListener('click',()=>{
   const rows=scopeRows();
-  if(!rows.length){ alert('Bu sekmede satır yok.'); return; }
+  if(!rows.length){ alert('Nema redova u ovoj kartici.'); return; }
   // Çalışma + geri-yükleme şablonu. EAN/catNo tahminle önden dolu; yanlışları düzelt, boşları doldur.
   const head=['Handle','Title','Option1 Name','Option1 Value','Shade','Reason','Guess b2b','EAN','catNo','Group','Score','Status'];
   const lines=[head.join(',')];
@@ -695,7 +816,7 @@ $('#btnExportWork').addEventListener('click',()=>{
 });
 // AİLE-ÖZETİ CSV (ChatGPT'nin istediği sınıflandırma raporu — aile başına bir satır)
 $('#btnExportFam').addEventListener('click',()=>{
-  if(!S.fams.length){ alert('Önce yükle.'); return; }
+  if(!S.fams.length){ alert('Prvo učitaj.'); return; }
   const head=['Vendor','Handle','Title','Variants','SelectedGroup','TopScore','2ndGroup','2ndScore','Gap',
               'Ready','Pending','Miss','Collision','Sonly','OutOfScope','Classification'];
   const lines=[head.join(',')];
@@ -711,16 +832,16 @@ $('#btnExportFam').addEventListener('click',()=>{
       cc.ready, cc.pending, cc.miss, coll, cc.sonly, f.outOfScope?1:0, classifyFam(f)
     ].map(csvCell).join(','));
   });
-  dl('gr-aile-ozeti.csv', lines.join('\n'));
+  dl('gr-urun-ozeti.csv', lines.join('\n'));
 });
 $('#btnExportCsv').addEventListener('click',()=>{
   const ok=allRows().filter(r=>r.confirmed && r.b2bId!=null);
-  if(!ok.length){ alert('Onaylı eşleşme yok.'); return; }
+  if(!ok.length){ alert('Nema potvrđenih uparivanja.'); return; }
   // ÇİFT GÜVENLİK: hiçbir barkod export'ta 2 kez çıkamaz
   const seenBC={}, dupBC=[];
   ok.forEach(r=>{ const bc=S.b2b[r.b2bId].barcode; if(seenBC[bc]){ dupBC.push(bc); } seenBC[bc]=(seenBC[bc]||0)+1; });
   if(dupBC.length){ collisionGuard(); renderAll();
-    alert('⚠ '+[...new Set(dupBC)].length+' barkod hâlâ birden çok variant\'ta — export durduruldu, çakışmalar temizlendi. Bekleyen sekmesini kontrol et.'); return; }
+    alert('⚠ '+[...new Set(dupBC)].length+' barkod je i dalje na više varijanti — izvoz zaustavljen, konflikti očišćeni. Provjeri karticu \"Čeka\".'); return; }
   // dup catNo (SKU) uyarısı — barkod farklı ama catNo aynı = b2b veri sorunu
   const catMap={}; ok.forEach(r=>{ const c=(S.b2b[r.b2bId].catNo||'').trim(); if(c)(catMap[c]=catMap[c]||new Set()).add(S.b2b[r.b2bId].barcode); });
   const dupCat=Object.keys(catMap).filter(c=>catMap[c].size>1);
@@ -736,9 +857,9 @@ let byCat=null;
 function catIndex(){ if(byCat) return byCat; byCat={}; S.b2b.forEach((p,i)=>{ const c=(p.catNo||'').trim(); if(c && byCat[c]==null) byCat[c]=i; }); return byCat; }
 $('#fillFile').addEventListener('change',e=>{
   const file=e.target.files[0]; if(!file) return;
-  if(!S.b2b.length || !S.fams.length){ setFill('Önce b2b + Shopify yükle.',true); e.target.value=''; return; }
+  if(!S.b2b.length || !S.fams.length){ setFill('Prvo učitaj B2B + Shopify.',true); e.target.value=''; return; }
   const fr=new FileReader();
-  fr.onload=()=>{ try{ applyFill(csvToObjects(fr.result)); }catch(err){ setFill('CSV okunamadı: '+err.message,true); } e.target.value=''; };
+  fr.onload=()=>{ try{ applyFill(csvToObjects(fr.result)); }catch(err){ setFill('CSV se ne može pročitati: '+err.message,true); } e.target.value=''; };
   fr.readAsText(file);
 });
 function setFill(msg,err){ const el=$('#fillMsg'); el.textContent=msg; el.style.color=err?'var(--miss)':'var(--ok)'; }
@@ -765,7 +886,7 @@ function applyFill(objs){
     }
   }
   recompute();
-  setFill(`${applied} onaylandı${cleared?`, ${cleared} temizlendi`:''}${notfound?`, ${notfound} EAN/catNo bulunamadı`:''}${nomatch?`, ${nomatch} satır eşleşmedi`:''}${S.collisions?`, ⚠ ${S.collisions} çakışma`:''}.`, notfound>0||S.collisions>0);
+  setFill(`${applied} potvrđeno${cleared?`, ${cleared} očišćeno`:''}${notfound?`, ${notfound} EAN/catNo nije nađen`:''}${nomatch?`, ${nomatch} redova nespojeno`:''}${S.collisions?`, ⚠ ${S.collisions} konflikt`:''}.`, notfound>0||S.collisions>0);
 }
 
 renderList();
