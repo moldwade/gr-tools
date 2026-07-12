@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Golden Rose — Shopify ↔ B2B kimlik eşleştirme (Faza 0) · v1.0 jedno dugme Potvrdi/Vrati -->
+<!-- Golden Rose — Shopify ↔ B2B kimlik eşleştirme (Faza 0) · v1.0.1 fix: applyFill persistence -->
 <html lang="bs">
 <head>
 <meta charset="utf-8">
@@ -120,7 +120,7 @@
 <div class="wrap">
   <header class="top">
     <a href="/" class="backlink">← Golden Rose Tools</a>
-    <div class="eyebrow">Golden Rose · Faza 0 · <b style="color:var(--ink)">v1.0</b> · jednostavan tok</div>
+    <div class="eyebrow">Golden Rose · Faza 0 · <b style="color:var(--ink)">v1.0.1</b> · jednostavan tok</div>
     <h1>Shopify ↔ B2B <em>uparivanje</em></h1>
     <p class="lede">Prvo Shopify proizvod → B2B grupa (jedna odluka), pa broj unutar te grupe. Potvrđeni idu u Shopify import CSV (<b>SKU</b>=catNo, <b>Barcode</b>=EAN). B2B se samo čita.</p>
   </header>
@@ -883,14 +883,14 @@ function applyFill(objs){
     if(ean){
       const i=S.byBC[ean];
       if(i==null){ notfound++; continue; }
-      r.b2bId=i; r.confirmed=true; applied++;
+      r.b2bId=i; r.confirmed=true; r.userPicked=true; applied++;
     } else if(cno){
       const i=cat[cno];
       if(i==null){ notfound++; continue; }
-      r.b2bId=i; r.confirmed=true; applied++;
+      r.b2bId=i; r.confirmed=true; r.userPicked=true; applied++;
     } else {
-      // boş bırakılmış → eşleşmeyi kaldır
-      if(r.b2bId!=null||r.confirmed){ r.b2bId=null; r.confirmed=false; cleared++; }
+      // boş bırakılmış → eşleşmeyi kaldır (kayıtlı override'ı da temizle)
+      if(r.b2bId!=null||r.confirmed||r.userPicked){ r.b2bId=null; r.confirmed=false; r.userPicked=false; cleared++; }
     }
   }
   recompute();
