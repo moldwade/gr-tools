@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<!-- Golden Rose — Shopify ↔ B2B kimlik eşleştirme (Faz 0) · v0.7 vendor kapsam + aile sınıflandırma + aile-CSV -->
+<html lang="bs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GR · Shopify ↔ B2B eşleştirme</title>
+<style>
+  :root{
+    --bg:#faf6f3; --surface:#ffffff; --ink:#2c2330; --ink-soft:#857a89;
+    --rose:#b76e79; --rose-deep:#8f4f5e; --line:#efe6e8; --line-2:#e3d7da;
+    --ok:#2f8f63; --ok-bg:#e7f3ec; --review:#bb8312; --review-bg:#fbf2dd;
+    --miss:#c0556a; --miss-bg:#fbe9ec; --chip:#f3ebed;
+    --shadow:0 1px 2px rgba(44,35,48,.06),0 8px 24px rgba(143,79,94,.07);
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg); color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased; padding-bottom:120px}
+  .wrap{max-width:880px; margin:0 auto; padding:0 18px}
+  header.top{padding:30px 0 18px}
+  .eyebrow{font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--rose); font-weight:700}
+  h1{font-family:Georgia,"Times New Roman",serif; font-weight:600; font-size:27px; margin:6px 0 4px; letter-spacing:-.01em}
+  h1 em{font-style:italic; color:var(--rose-deep)}
+  .lede{color:var(--ink-soft); font-size:14px; max-width:62ch; margin:0}
+
+  .panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:18px; margin:14px 0}
+  .panel h2{font-size:13px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-soft); margin:0 0 12px; font-weight:700; display:flex; align-items:center; gap:8px}
+  .step-no{display:inline-grid; place-items:center; width:22px; height:22px; border-radius:50%; background:var(--rose); color:#fff; font-size:11px; font-weight:700; font-family:Georgia,serif}
+
+  .src-row{display:flex; gap:8px; flex-wrap:wrap}
+  button,.btn{font:inherit; cursor:pointer; border-radius:10px; border:1px solid var(--line-2); background:var(--surface); color:var(--ink); padding:10px 14px; font-weight:600; display:inline-flex; align-items:center; gap:7px; transition:.15s}
+  button:hover,.btn:hover{border-color:var(--rose); color:var(--rose-deep)}
+  button.primary{background:var(--rose); border-color:var(--rose); color:#fff}
+  button.primary:hover{background:var(--rose-deep); color:#fff}
+  button.ghost{background:transparent; border-style:dashed}
+  button:disabled{opacity:.45; cursor:not-allowed}
+  .btn input{display:none}
+  .status{font-size:13px; color:var(--ink-soft); margin-top:10px; min-height:18px}
+  .status b{color:var(--ink)} .status.ok b{color:var(--ok)} .status.err{color:var(--miss)}
+  .login{display:none; gap:8px; margin-top:12px; flex-wrap:wrap; align-items:center}
+  .login.show{display:flex}
+  .login input{font:inherit; padding:9px 11px; border:1px solid var(--line-2); border-radius:9px; min-width:180px}
+  .login input:focus{outline:2px solid var(--rose); border-color:var(--rose)}
+
+  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:10px}
+  .stat{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px}
+  .stat .n{font-family:Georgia,serif; font-size:24px; font-weight:600; line-height:1}
+  .stat .l{font-size:11px; color:var(--ink-soft); margin-top:5px; text-transform:uppercase; letter-spacing:.04em}
+  .stat.ready .n{color:var(--ok)} .stat.pending .n{color:var(--review)} .stat.miss .n{color:var(--miss)}
+
+  .tabs{display:flex; gap:6px; margin:16px 0 4px; flex-wrap:wrap}
+  .tab{padding:7px 13px; border-radius:999px; font-size:13px; font-weight:600; border:1px solid var(--line-2); background:var(--surface); color:var(--ink-soft); cursor:pointer}
+  .tab.active{background:var(--ink); color:#fff; border-color:var(--ink)}
+  .tab .dot{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px; vertical-align:middle}
+  .dot.ready{background:var(--ok)} .dot.pending{background:var(--review)} .dot.miss{background:var(--miss)}
+
+  .fam{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); margin:12px 0; overflow:hidden}
+  .fam-head{padding:13px 16px; display:flex; align-items:center; gap:12px; cursor:pointer; user-select:none}
+  .fam-head:hover{background:#fcf9fa}
+  .fam-title{font-weight:700; font-size:15px}
+  .fam-sub{font-size:12px; color:var(--ink-soft); margin-top:3px}
+  .fam-sub .g{color:var(--rose-deep); font-weight:600}
+  .fam-sub .g.none{color:var(--miss)}
+  .fam-arrow{margin-left:auto; text-align:right}
+  .fam-badges{display:flex; gap:4px; justify-content:flex-end; flex-wrap:wrap}
+  .mini{font-size:11px; font-weight:700; padding:2px 7px; border-radius:6px; white-space:nowrap}
+  .mini.ready{background:var(--ok-bg); color:var(--ok)} .mini.pending{background:var(--review-bg); color:var(--review)} .mini.miss{background:var(--miss-bg); color:var(--miss)}
+  .fam-body{display:none; border-top:1px solid var(--line)}
+  .fam.open .fam-body{display:block}
+  .chev{transition:.2s; display:inline-block; color:var(--ink-soft); font-size:12px}
+  .fam.open .chev{transform:rotate(90deg)}
+
+  .fam-tools{display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:11px 16px; background:#fcf9fa; border-bottom:1px solid var(--line)}
+  .fam-tools label{font-size:12px; color:var(--ink-soft); display:flex; align-items:center; gap:6px}
+  select.grpsel,select.pick{font:inherit; font-size:12px; padding:6px 8px; border:1px solid var(--line-2); border-radius:8px; max-width:100%; background:#fff}
+  select.grpsel{min-width:200px; font-weight:600}
+  .fam-tools button{padding:6px 11px; font-size:12px; margin-left:auto}
+
+  .vrow{display:grid; grid-template-columns:1fr auto 1.2fr; align-items:center; gap:10px; padding:11px 16px; border-top:1px solid var(--line)}
+  .vrow:first-child{border-top:none}
+  .side{min-width:0}
+  .side .nm{font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .side .meta{font-size:11px; color:var(--ink-soft); margin-top:2px}
+  .shop .nm{font-weight:600}
+  .bridge{display:flex; flex-direction:column; align-items:center; gap:3px; min-width:64px}
+  .numchip{font-family:Georgia,serif; font-weight:700; font-size:14px; padding:3px 11px; border-radius:999px; background:var(--chip); color:var(--rose-deep); border:1px solid var(--line-2); white-space:nowrap}
+  .numchip.miss{background:var(--miss-bg); color:var(--miss); border-color:transparent}
+  .badge{font-size:10px; font-weight:700; letter-spacing:.03em}
+  .badge.ready{color:var(--ok)} .badge.pending{color:var(--review)} .badge.miss{color:var(--miss)}
+  .b2b .nm{font-weight:600}
+  .b2b.none .nm{color:var(--miss)}
+
+  .empty{text-align:center; padding:46px 20px; color:var(--ink-soft)}
+  .empty .big{font-family:Georgia,serif; font-size:18px; color:var(--ink); margin-bottom:6px}
+
+  .exportbar{position:fixed; left:0; right:0; bottom:0; background:rgba(255,255,255,.94); backdrop-filter:blur(8px); border-top:1px solid var(--line-2); padding:12px 18px; z-index:50; display:none}
+  .exportbar.show{display:block}
+  .exportbar .wrap{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+  .exportbar .summary{font-size:13px; color:var(--ink-soft); margin-right:auto}
+  .exportbar .summary b{color:var(--ink)}
+
+  @media(max-width:600px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .vrow{grid-template-columns:1fr auto; row-gap:6px}
+    .vrow .b2b{grid-column:1 / -1}
+  }
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Golden Rose · Faz 0 · <b style="color:var(--ink)">v0.7</b> · vendor kapsam + aile sınıfı</div>
+    <h1>Shopify ↔ B2B <em>kimlik eşleştirme</em></h1>
+    <p class="lede">Önce Shopify ürünü → b2b grubu (bir karar), sonra numara o grubun içinde. Onaylananlar Shopify import CSV'sine (<b>SKU</b>=catNo, <b>Barcode</b>=EAN) yazılır. B2B yalnızca okunur.</p>
+  </header>
+
+  <section class="panel">
+    <h2><span class="step-no">1</span> B2B kaynağı</h2>
+    <div class="src-row">
+      <button id="btnLogin">🔴 Firebase'e giriş (canlı)</button>
+      <label class="btn">📁 JSON yükle<input type="file" id="b2bFile" accept=".json,application/json"></label>
+      <button id="btnDemo" class="ghost">▶️ Demo (Silky Shine)</button>
+    </div>
+    <div class="login" id="loginForm">
+      <input type="email" id="email" placeholder="admin email" autocomplete="username">
+      <input type="password" id="pass" placeholder="šifra" autocomplete="current-password">
+      <button class="primary" id="btnDoLogin">Učitaj</button>
+    </div>
+    <div class="status" id="b2bStatus">Henüz yüklenmedi.</div>
+  </section>
+
+  <section class="panel">
+    <h2><span class="step-no">2</span> Shopify ürün export'u</h2>
+    <div class="src-row">
+      <label class="btn">📄 CSV yükle<input type="file" id="shopFile" accept=".csv,text/csv"></label>
+      <span class="status" id="shopStatus" style="margin:0; align-self:center">Admin → Products → Export → Plain CSV.</span>
+    </div>
+  </section>
+
+  <section class="panel" id="matchPanel" style="display:none">
+    <h2><span class="step-no">3</span> Eşleştirme</h2>
+    <div class="stats">
+      <div class="stat"><div class="n" id="sTot">0</div><div class="l">variant</div></div>
+      <div class="stat ready"><div class="n" id="sReady">0</div><div class="l">onaylı</div></div>
+      <div class="stat pending"><div class="n" id="sPending">0</div><div class="l">bekleyen</div></div>
+      <div class="stat miss"><div class="n" id="sMiss">0</div><div class="l">eşleşmeyen</div></div>
+    </div>
+    <div id="collWarn" style="display:none; margin-top:10px; padding:10px 12px; border-radius:10px; background:var(--miss-bg); color:var(--miss); font-size:13px"></div>
+    <div class="tabs" id="tabs">
+      <div class="tab active" data-f="all">Tümü</div>
+      <div class="tab" data-f="ready"><span class="dot ready"></span>Onaylı</div>
+      <div class="tab" data-f="pending"><span class="dot pending"></span>Bekleyen</div>
+      <div class="tab" data-f="miss"><span class="dot miss"></span>Eşleşmeyen</div>
+      <div class="tab" data-f="sonly">🚫 b2b-yok<span id="sonlyTabN"></span></div>
+      <div class="tab" data-f="oos">📦 kapsam-dışı<span id="oosTabN"></span></div>
+    </div>
+  </section>
+
+  <div id="list"></div>
+</div>
+
+<div class="exportbar" id="exportbar">
+  <div class="wrap">
+    <div class="summary"><b id="exCount">0</b> onaylı hazır · <span id="fillMsg" style="color:var(--ink-soft)"></span></div>
+    <label class="btn">⬆︎ Doldurulmuş CSV<input type="file" id="fillFile" accept=".csv,text/csv"></label>
+    <button id="btnExportFam">⬇︎ Aile-özeti CSV</button>
+    <button id="btnExportWork">⬇︎ Çalışma CSV'si (<span id="expTab">tümü</span>)</button>
+    <button id="btnExportCsv" class="primary">⬇︎ Shopify import CSV</button>
+  </div>
+</div>
+
+<script>
+/* ============ STATE ============ */
+const S = { b2b:[], groups:[], groupIx:[], byBC:{}, byNum:{}, fams:[], filter:'all' };
+const $ = s => document.querySelector(s);
+
+/* ============ NORMALIZE (b2b'den) ============ */
+function parseBosNum(raw){
+  if(raw==null) return 0;
+  let s=String(raw).trim().replace(/"/g,'').replace(/\s/g,''); if(!s) return 0;
+  const d=s.includes('.'), c=s.includes(',');
+  if(d&&c) s=s.replace(/\./g,'').replace(',','.');
+  else if(c) s=s.replace(',','.');
+  else if(d){ if(/^-?\d{1,3}(\.\d{3})+$/.test(s)) s=s.replace(/\./g,''); }
+  return parseFloat(s)||0;
+}
+function tailNum(s){
+  if(!s) return null;
+  const m=String(s).match(/(\d{1,5})\s*$/);
+  if(m) return m[1].replace(/^0+(?=\d)/,'');
+  const all=String(s).match(/\d{1,5}/g);
+  return all ? all[all.length-1].replace(/^0+(?=\d)/,'') : null;
+}
+function famTokens(name){
+  let s=String(name||'').toLowerCase();
+  s=s.replace(/(\d{1,5})\s*$/,' ').replace(/[.,;:/\\_\-()]/g,' ').replace(/\s+/g,' ').trim();
+  return s.split(' ').filter(Boolean);
+}
+// token benzerliği: tam=1, biri diğerinin öneki=0.85, ortak önek>=4=0.7 (color/colour), yoksa 0
+function tokSim(a,b){
+  if(a===b) return 1;
+  const mn=Math.min(a.length,b.length);
+  if(mn>=3 && (a.startsWith(b)||b.startsWith(a))) return .85;
+  let cp=0; while(cp<mn && a[cp]===b[cp]) cp++;
+  if(cp>=4) return .7;
+  return 0;
+}
+// IDF: katalogda nadir geçen kelime = yüksek ağırlık (velvet, wow, longstay); sık geçen = düşük (matte, lipstick, nail)
+function idf(t){
+  const N=S._N||1, d=(S._df&&S._df[t])||0;
+  let v=Math.log(N/(d+1));
+  return v<0.5?0.5:(v>4.5?4.5:v);
+}
+// ayırt-edici-kelime ağırlıklı skor (aTok = sorgu tarafı, Shopify başlığı)
+function famScore(aTok,bTok){
+  if(!aTok.length) return 0;
+  let num=0, den=0;
+  for(const a of aTok){
+    const w=idf(a); den+=w;
+    let best=0;
+    for(const b of bTok){ const s=tokSim(a,b); if(s>best) best=s; if(best===1) break; }
+    num+=w*best;
+  }
+  return den?num/den:0;
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function fmt(n){ const v=parseBosNum(n); return v?v.toFixed(2).replace('.',',')+' KM':'—'; }
+
+/* ============ CSV (gömülü, CDN'siz) ============ */
+function parseCSV(text){
+  if(text.charCodeAt(0)===0xFEFF) text=text.slice(1);
+  const rows=[]; let row=[], field='', inQ=false; const n=text.length;
+  for(let i=0;i<n;i++){
+    const ch=text[i];
+    if(inQ){
+      if(ch==='"'){ if(text[i+1]==='"'){ field+='"'; i++; } else inQ=false; }
+      else field+=ch;
+    } else {
+      if(ch==='"') inQ=true;
+      else if(ch===','){ row.push(field); field=''; }
+      else if(ch==='\n'){ row.push(field); rows.push(row); row=[]; field=''; }
+      else if(ch!=='\r') field+=ch;
+    }
+  }
+  if(field.length||row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+function csvToObjects(text){
+  const rows=parseCSV(text); if(!rows.length) return [];
+  const head=rows[0].map(h=>h.trim());
+  return rows.slice(1).filter(r=>r.some(c=>c!=='')).map(r=>{
+    const o={}; head.forEach((h,k)=>o[h]=r[k]!=null?r[k]:''); return o;
+  });
+}
+
+/* ============ THRESHOLDS ============ */
+const GROUP_MIN=0.60;   // aile→grup: grubu GÖSTERME eşiği (atama)
+const CONF_MIN=0.70;    // aile→grup: OTOMATİK ONAY eşiği (daha katı)
+const CONF_MARGIN=0.10; // en iyi grup, ikinciyi bu kadar geçmeli ki otomatik onaylansın
+const NAME_MIN=0.80;    // numarasız ürün ad-eşleşme eşiği
+const FB_MIN=0.60;      // grupsuz yedek numara-eşleşme eşiği
+
+/* ============ INDEX ============ */
+function indexB2b(){
+  S.byBC={}; S.byNum={};
+  S.b2b.forEach((p,i)=>{
+    S.byBC[p.barcode]=i;
+    if(p.num!=null)(S.byNum[p.num]=S.byNum[p.num]||[]).push(i);
+  });
+  // IDF sözlüğü: her kelimenin kaç üründe geçtiği
+  const df={}; S.b2b.forEach(p=>{ new Set(p.famTokens).forEach(t=>df[t]=(df[t]||0)+1); });
+  S._df=df; S._N=S.b2b.length||1;
+  S.groupIx=S.groups.map(g=>{
+    const members=(g.barcodes||[]).map(bc=>S.byBC[String(bc).trim()]).filter(i=>i!=null)
+      .map(i=>({i, num:S.b2b[i].num}));
+    // üye ürün adlarının ORTAK kelimeleri (grup adı yanıltıcı olabilir: "Velvet Matte Ruž" vs ürün "VELVET MATTE LIPSTICK")
+    const cnt={}; members.forEach(m=>{ new Set(S.b2b[m.i].famTokens).forEach(t=>cnt[t]=(cnt[t]||0)+1); });
+    const th=Math.max(1, Math.ceil(members.length*0.5));
+    const memberCommon=Object.keys(cnt).filter(t=>cnt[t]>=th);
+    return { name:g.name||'(isimsiz grup)', nameTokens:famTokens(g.name), memberCommon, members };
+  }).filter(g=>g.members.length);  // boş grupları at
+}
+
+/* ============ MATCH ============ */
+function assignGroup(fam){
+  const aTok=famTokens(fam.title);
+  // grup skoru = max(grup ADI skoru, üye ADLARININ ortak kelime skoru). Terse/yabancı grup adlarını üye adları kurtarır.
+  const scored=S.groupIx.map((g,gi)=>({gi, score:Math.max(famScore(aTok,g.nameTokens), famScore(aTok,g.memberCommon))}))
+    .sort((a,b)=>b.score-a.score);
+  fam.groupCands=scored.slice(0,8);
+  const top=scored[0];
+  fam.groupScore=top?top.score:0;
+  const margin = scored.length>1 && top ? top.score-scored[1].score : 1;
+  fam.groupIdx=(top && top.score>=GROUP_MIN)?top.gi:null;
+  // OTOMATİK onay: yüksek skor + ikinciyle net fark. Sınırdakiler "bekleyen"e düşer.
+  fam.groupConfirmed=!!(top && top.score>=CONF_MIN && margin>=CONF_MARGIN);
+}
+function globalFallback(fam,v){
+  const aTok=famTokens(fam.title);
+  if(v.num!=null){
+    const cands=(S.byNum[v.num]||[]).map(i=>({i,score:famScore(aTok,S.b2b[i].famTokens)})).sort((a,b)=>b.score-a.score);
+    if(cands.length){
+      const top=cands[0], tied=cands.length>1 && cands[1].score>=top.score-0.05;
+      if(top.score>=FB_MIN && !tied) return {b2bId:top.i, confirmed:true, score:top.score, opts:cands.map(c=>c.i)};
+      return {b2bId:top.score>=0.4?top.i:null, confirmed:false, score:top.score, opts:cands.map(c=>c.i)};
+    }
+    return {b2bId:null, confirmed:false, score:0, opts:[]};
+  }
+  // numarasız → ad eşleşmesi
+  const cands=S.b2b.map((p,i)=>({i,score:famScore(aTok,p.famTokens)})).sort((a,b)=>b.score-a.score).slice(0,8);
+  const top=cands[0];
+  if(top && top.score>=NAME_MIN) return {b2bId:top.i, confirmed:false, score:top.score, opts:cands.map(c=>c.i)};
+  return {b2bId:null, confirmed:false, score:top?top.score:0, opts:cands.filter(c=>c.score>=0.4).map(c=>c.i)};
+}
+function matchFamily(fam){
+  if(fam.outOfScope){
+    fam.rows = fam.variants.map(v=>({ vid:fam.handle+'::'+v.option, handle:fam.handle, famTitle:fam.title,
+      optName:fam.optName, option:v.option, img:v.img, shopPrice:v.price, num:v.num, hasGroup:false,
+      b2bId:null, confirmed:false, score:0, opts:[], outOfScope:true }));
+    return;
+  }
+  if(fam.shopifyOnly){
+    fam.rows = fam.variants.map(v=>({ vid:fam.handle+'::'+v.option, handle:fam.handle, famTitle:fam.title,
+      optName:fam.optName, option:v.option, img:v.img, shopPrice:v.price, num:v.num, hasGroup:false,
+      b2bId:null, confirmed:false, score:0, opts:[], shopifyOnly:true }));
+    return;
+  }
+  const g = fam.groupIdx!=null ? S.groupIx[fam.groupIdx] : null;
+  fam.rows = fam.variants.map(v=>{
+    const r={ vid:fam.handle+'::'+v.option, handle:fam.handle, famTitle:fam.title, optName:fam.optName,
+              option:v.option, img:v.img, shopPrice:v.price, num:v.num, hasGroup:!!g,
+              b2bId:null, confirmed:false, score:fam.groupScore||0, opts:[], shopifyOnly:false };
+    if(g){
+      r.opts=g.members.map(m=>m.i);                         // bu grubun tüm nijansaları
+      const hit=g.members.filter(m=>m.num!=null && v.num!=null && String(m.num)===String(v.num));
+      if(fam.groupConfirmed){
+        // grup güvenle onaylı → grubun numara eşleşmesine güven
+        if(hit.length===1){ r.b2bId=hit[0].i; r.confirmed=true; }
+        else if(hit.length>1){ r.b2bId=hit[0].i; r.confirmed=false; }
+        else if(!fam.manualGroup){
+          // onaylı (otomatik) grup ama shade yok → grupsuz ekstra olabilir, global dene. Elle seçilen grupta GEZİNME.
+          const fb=globalFallback(fam,v);
+          if(fb.b2bId!=null){ r.b2bId=fb.b2bId; r.confirmed=fb.confirmed; r.score=fb.score; r.opts=Array.from(new Set(r.opts.concat(fb.opts))); }
+        }
+      } else {
+        // grup ZAYIF (0.60–0.70): numaraya körü körüne güvenme. Global isim+numarayı da hesapla, en iyi isim skorunu öner.
+        const fb=globalFallback(fam,v);   // tüm b2b içinde numara eşleşenler, isim skoruyla sıralı
+        if(fb.b2bId!=null){ r.b2bId=fb.b2bId; r.confirmed=false; r.score=fb.score; }   // öneri (onay bekler)
+        else if(hit.length>=1){ r.b2bId=hit[0].i; r.confirmed=false; }
+        r.opts=Array.from(new Set(r.opts.concat(fb.opts||[])));
+      }
+    } else {
+      const fb=globalFallback(fam,v);
+      r.b2bId=fb.b2bId; r.confirmed=fb.confirmed; r.score=fb.score; r.opts=fb.opts;
+    }
+    return r;
+  });
+}
+function runMatch(){
+  indexB2b();
+  S.fams.forEach(f=>{ if(!f.outOfScope) assignGroup(f); matchFamily(f); });
+  collisionGuard();
+  renderAll();
+}
+// GÜVENLİK: bir b2b barkodu en fazla 1 Shopify variant'a. Çakışanları export dışı bırak.
+function collisionGuard(){
+  const byB={};
+  allRows().forEach(r=>{ r.collision=false; if(r.confirmed && r.b2bId!=null)(byB[r.b2bId]=byB[r.b2bId]||[]).push(r); });
+  S.collisions=0;
+  for(const k in byB){
+    const list=byB[k];
+    if(list.length>1){ list.forEach(r=>{ r.collision=true; r.confirmed=false; }); S.collisions+=list.length; }
+  }
+}
+// veri değişince: guard + yeniden çiz
+function recompute(){ collisionGuard(); renderAll(); }
+
+/* ============ STATUS ============ */
+function rowStatus(r){
+  if(r.outOfScope) return 'oos';
+  if(r.shopifyOnly) return 'sonly';
+  if(r.confirmed && r.b2bId!=null) return 'ready';
+  if(r.b2bId==null && (!r.opts || r.opts.length===0)) return 'miss';
+  return 'pending';
+}
+// aile sınıfı (ChatGPT sınıflandırması): türetilmiş
+function classifyFam(f){
+  if(f.outOfScope) return 'kapsam-dışı';
+  if(f.shopifyOnly) return 'b2b-yok(legacy)';
+  if(f.groupIdx==null) return 'eşleşmedi(elle-map?)';
+  if(f.groupConfirmed) return f.manualGroup?'onaylı-grup(elle)':'onaylı-grup(oto)';
+  return 'aday-grup';
+}
+function allRows(){ return S.fams.flatMap(f=>f.rows); }
+
+/* ============ RENDER ============ */
+function renderStats(){
+  const rows=allRows(); const c={ready:0,pending:0,miss:0,sonly:0,oos:0};
+  rows.forEach(r=>c[rowStatus(r)]++);
+  $('#sTot').textContent=rows.length;
+  $('#sReady').textContent=c.ready; $('#sPending').textContent=c.pending; $('#sMiss').textContent=c.miss;
+  const cw=$('#collWarn');
+  if(cw){
+    let m='';
+    if(S.collisions>0) m+=`⚠ <b>${S.collisions}</b> satır çakışma — export dışı, "Bekleyen"de <b>çakışma(aynı-EAN)</b>. `;
+    if(c.sonly>0) m+=`🚫 <b>${c.sonly}</b> satır b2b-yok (senkron dışı). `;
+    if(c.oos>0) m+=`📦 <b>${c.oos}</b> satır kapsam-dışı (GR-dışı vendor). `;
+    cw.style.display = m?'':'none'; cw.innerHTML=m;
+  }
+  const st=$('#sonlyTabN'); if(st) st.textContent=c.sonly?` (${c.sonly})`:'';
+  const ot=$('#oosTabN'); if(ot) ot.textContent=c.oos?` (${c.oos})`:'';
+  $('#matchPanel').style.display=rows.length?'':'none';
+}
+function renderList(){
+  const host=$('#list');
+  if(!allRows().length){
+    host.innerHTML=`<div class="empty"><div class="big">Henüz eşleştirme yok</div>
+      Önce b2b kaynağını, sonra Shopify CSV'sini yükle. Hızlı bakmak için <b>Demo (Silky Shine)</b>.</div>`;
+    $('#exportbar').classList.remove('show'); return;
+  }
+  let html='';
+  S.fams.forEach((f,fi)=>{
+    const vis=f.rows.filter(r=> S.filter==='all' || rowStatus(r)===S.filter);
+    if(!vis.length) return;
+    const c={ready:0,pending:0,miss:0,sonly:0,oos:0}; f.rows.forEach(r=>c[rowStatus(r)]++);
+    const g = f.groupIdx!=null ? S.groupIx[f.groupIdx] : null;
+    const gLabel = f.outOfScope ? `<span class="none">📦 kapsam-dışı (${esc(f.vendor||'GR değil')})</span>`
+      : f.shopifyOnly ? '<span class="none">🚫 b2b\'de yok (senkron dışı)</span>'
+      : g ? `→ ${esc(g.name)} <span style="color:var(--ink-soft)">(${Math.round(f.groupScore*100)}%${f.groupConfirmed?(f.manualGroup?' · elle':''):' · seç'})</span>`
+      : '<span class="none">grup seçilmedi</span>';
+    const nApprovable=f.rows.filter(r=>!r.confirmed && r.b2bId!=null).length;
+    html+=`<div class="fam" data-fi="${fi}">
+      <div class="fam-head">
+        <div style="min-width:0">
+          <div class="fam-title">${esc(f.title)}</div>
+          <div class="fam-sub">${f.rows.length} variant · <span class="g ${(g&&!f.shopifyOnly&&!f.outOfScope)?'':'none'}">${gLabel}</span></div>
+        </div>
+        <div class="fam-arrow">
+          <div class="fam-badges">
+            ${c.ready?`<span class="mini ready">${c.ready} onaylı</span>`:''}
+            ${c.pending?`<span class="mini pending">${c.pending} bekleyen</span>`:''}
+            ${c.miss?`<span class="mini miss">${c.miss} yok</span>`:''}
+            ${c.sonly?`<span class="mini miss">🚫 ${c.sonly}</span>`:''}
+            ${c.oos?`<span class="mini miss">📦 ${c.oos}</span>`:''}
+          </div>
+          <div style="margin-top:5px"><span class="chev">▶</span></div>
+        </div>
+      </div>
+      <div class="fam-body">
+        <div class="fam-tools">
+          <label>Grup:
+            <select class="grpsel" data-fi="${fi}">
+              ${grpOptions(f)}
+              <option value="" ${(!g&&!f.shopifyOnly&&!f.outOfScope)?'selected':''}>— grup yok —</option>
+              <option value="__sonly__" ${f.shopifyOnly?'selected':''}>🚫 b2b'de yok (legacy)</option>
+              <option value="__oos__" ${f.outOfScope?'selected':''}>📦 kapsam-dışı (GR değil)</option>
+            </select>
+          </label>
+          <button class="approveFam" data-fi="${fi}" ${nApprovable?'':'disabled'}>✓ Önerileri onayla${nApprovable?` (${nApprovable})`:''}</button>
+        </div>
+        ${vis.map(rowHTML).join('')}
+      </div>
+    </div>`;
+  });
+  host.innerHTML=html || `<div class="empty"><div class="big">Bu filtrede satır yok</div></div>`;
+  // expand families that need attention
+  host.querySelectorAll('.fam').forEach(el=>{
+    const f=S.fams[+el.dataset.fi];
+    if(f.rows.some(r=>rowStatus(r)!=='ready') || S.filter!=='all') el.classList.add('open');
+    el.querySelector('.fam-head').addEventListener('click',e=>{ if(e.target.closest('.fam-tools'))return; el.classList.toggle('open'); });
+  });
+  host.querySelectorAll('select.grpsel').forEach(sel=>sel.addEventListener('change',onGroupChange));
+  host.querySelectorAll('button.approveFam').forEach(b=>b.addEventListener('click',onApproveFam));
+  host.querySelectorAll('select.pick').forEach(sel=>sel.addEventListener('change',onPick));
+  renderExportBar();
+}
+function grpOptions(f){
+  const cur=f.groupIdx;
+  let opts=(f.groupCands||[]).slice();
+  if(cur!=null && !opts.some(c=>c.gi===cur)) opts.unshift({gi:cur,score:f.groupScore||0});
+  return opts.map(c=>`<option value="${c.gi}" ${c.gi===cur?'selected':''}>${esc(S.groupIx[c.gi].name)} · ${Math.round(c.score*100)}%</option>`).join('');
+}
+function rowHTML(r){
+  const st=rowStatus(r);
+  const bp = r.b2bId!=null ? S.b2b[r.b2bId] : null;
+  const shade = r.num!=null ? r.num : '—';
+  if(st==='oos'){
+    return `<div class="vrow">
+      <div class="shop side"><div class="nm">${esc(r.option)}</div>
+        <div class="meta">${esc(r.optName||'variant')} · Shopify ${fmt(r.shopPrice)}</div></div>
+      <div class="bridge"><div class="numchip miss">${esc(shade)}</div><div class="badge miss">📦 kapsam-dışı</div></div>
+      <div class="b2b side none"><div class="nm">GR matcher dışı</div>
+        <div class="meta">Golden Rose olmayan vendor — eşleştirilmez</div></div>
+    </div>`;
+  }
+  if(st==='sonly'){
+    return `<div class="vrow">
+      <div class="shop side"><div class="nm">${esc(r.option)}</div>
+        <div class="meta">${esc(r.optName||'variant')} · Shopify ${fmt(r.shopPrice)}</div></div>
+      <div class="bridge"><div class="numchip miss">${esc(shade)}</div><div class="badge miss">🚫 b2b-yok</div></div>
+      <div class="b2b side none"><div class="nm">senkron dışı</div>
+        <div class="meta">b2b'de karşılığı yok — export edilmez</div></div>
+    </div>`;
+  }
+  const badge = r.collision?'⚠ çakışma':st==='ready'?'onaylı':st==='miss'?'yok':(r.b2bId!=null?'öneri':'seç');
+  const badgeCls = r.collision?'miss':st;
+  const picker = r.opts && r.opts.length ? `<select class="pick" data-vid="${esc(r.vid)}">
+      <option value="">— eşleşme yok —</option>
+      ${r.opts.map(i=>`<option value="${i}" ${i===r.b2bId?'selected':''}>${esc(S.b2b[i].name)}</option>`).join('')}
+    </select>` : '';
+  const right = bp
+    ? `<div class="b2b side ${r.collision?'none':''}"><div class="nm">${esc(bp.name)}</div>
+         <div class="meta">${r.collision?'⚠ bu EAN başka variant\'a da atandı — ':''}EAN ${esc(bp.barcode)} · stanje ${esc(bp.stock)} · VPC ${fmt(bp.price)}</div>${picker}</div>`
+    : `<div class="b2b side none"><div class="nm">${r.opts&&r.opts.length?'seçim bekliyor':'eşleşme yok'}</div>
+         <div class="meta">${r.num!=null?`"${esc(r.num)}" bu grupta yok`:'numara çıkarılamadı'}</div>${picker}</div>`;
+  return `<div class="vrow">
+    <div class="shop side"><div class="nm">${esc(r.option)}</div>
+      <div class="meta">${esc(r.optName||'variant')} · Shopify ${fmt(r.shopPrice)}</div></div>
+    <div class="bridge">
+      <div class="numchip ${st==='miss'?'miss':''}">${esc(shade)}</div>
+      <div class="badge ${badgeCls}">${badge}</div>
+    </div>
+    ${right}
+  </div>`;
+}
+function renderExportBar(){
+  const ok=allRows().filter(r=>r.confirmed && r.b2bId!=null);
+  $('#exCount').textContent=ok.length;
+  const labels={all:'tümü',ready:'onaylı',pending:'bekleyen',miss:'eşleşmeyen'};
+  const et=$('#expTab'); if(et) et.textContent=labels[S.filter]||'tümü';
+  $('#exportbar').classList.toggle('show', allRows().length>0);
+}
+function renderAll(){ renderStats(); renderList(); }
+
+/* ============ INTERACTIONS ============ */
+function onGroupChange(e){
+  const fi=+e.target.dataset.fi, f=S.fams[fi];
+  const val=e.target.value;
+  if(val==='__sonly__'){ f.shopifyOnly=true; f.outOfScope=false; f.groupIdx=null; f.groupConfirmed=false; f.manualGroup=false; matchFamily(f); recompute(); return; }
+  if(val==='__oos__'){ f.outOfScope=true; f.shopifyOnly=false; f.groupIdx=null; f.groupConfirmed=false; f.manualGroup=false; matchFamily(f); recompute(); return; }
+  f.shopifyOnly=false; f.outOfScope=false;
+  f.groupIdx = val===''?null:+val;
+  f.groupConfirmed = (val!=='');   // kullanıcı seçtiyse onaylı say → numara eşleşmeleri otomatik
+  f.manualGroup = (val!=='');      // elle seçildi → grup içinde katı eşleştir (global gezinme)
+  matchFamily(f); recompute();
+}
+function onApproveFam(e){
+  const f=S.fams[+e.target.dataset.fi];
+  f.rows.forEach(r=>{ if(r.b2bId!=null) r.confirmed=true; });
+  recompute();
+}
+function onPick(e){
+  const vid=e.target.dataset.vid, val=e.target.value;
+  const r=allRows().find(x=>x.vid===vid); if(!r) return;
+  r.b2bId = val===''?null:+val;
+  r.confirmed = r.b2bId!=null;
+  recompute();
+}
+
+/* ============ SHOPIFY CSV ============ */
+function loadShopFromRows(rows){
+  const fams=new Map();
+  for(const r of rows){
+    const handle=(r['Handle']||'').trim(); if(!handle) continue;
+    if(!fams.has(handle)) fams.set(handle,{handle, title:'', optName:'', vendor:'', variants:[]});
+    const f=fams.get(handle);
+    if((r['Title']||'').trim() && !f.title) f.title=r['Title'].trim();
+    if((r['Option1 Name']||'').trim() && !f.optName) f.optName=r['Option1 Name'].trim();
+    if((r['Vendor']||'').trim() && !f.vendor) f.vendor=r['Vendor'].trim();
+    const opt=(r['Option1 Value']||'').trim();
+    if(opt) f.variants.push({ option:opt, price:r['Variant Price']||'', img:(r['Image Src']||r['Variant Image']||'').trim(), num:tailNum(opt) });
+  }
+  S.fams=[...fams.values()].filter(f=>f.variants.length).map(f=>{
+    if(!f.title) f.title=f.variants[0].option;
+    f.variants.forEach(v=>{ if(v.num==null && /default title/i.test(v.option)) v.num=tailNum(f.title); });
+    // KAPSAM: Golden Rose olmayan vendor (ör. Dermokil) otomatik kapsam-dışı → GR matcher'ına girmez
+    f.outOfScope = !!(f.vendor && !/golden\s*rose/i.test(f.vendor));
+    return f;
+  });
+  const nv=S.fams.reduce((a,f)=>a+f.variants.length,0);
+  const oosN=S.fams.filter(f=>f.outOfScope).length;
+  $('#shopStatus').innerHTML=`<b>${S.fams.length}</b> ürün · <b>${nv}</b> variant${oosN?` · <b>${oosN}</b> kapsam-dışı (GR değil)`:''}.`;
+  $('#shopStatus').className='status ok';
+  if(S.b2b.length) runMatch();
+}
+$('#shopFile').addEventListener('change',e=>{
+  const file=e.target.files[0]; if(!file) return;
+  $('#shopStatus').textContent='Okunuyor…'; $('#shopStatus').className='status';
+  const fr=new FileReader();
+  fr.onload=()=>{ try{ loadShopFromRows(csvToObjects(fr.result)); }
+    catch(err){ $('#shopStatus').textContent='CSV okunamadı: '+err.message; $('#shopStatus').className='status err'; } };
+  fr.onerror=()=>{ $('#shopStatus').textContent='Dosya okunamadı.'; $('#shopStatus').className='status err'; };
+  fr.readAsText(file);
+});
+
+/* ============ B2B SOURCES ============ */
+function ingestB2b(products, groups){
+  S.b2b=products.map(p=>({ name:p.name||'', catNo:p.catNo||'', barcode:String(p.barcode||'').trim(),
+    stock:p.stock??'', price:p.price??'', famTokens:famTokens(p.name), num:tailNum(p.name) })).filter(p=>p.barcode);
+  S.groups=(groups||[]).map(g=>({name:g.name||'', barcodes:g.barcodes||[]}));
+  $('#b2bStatus').innerHTML=`<b>${S.b2b.length}</b> b2b ürün${S.groups.length?` · ${S.groups.length} grup`:''} yüklendi.`;
+  $('#b2bStatus').className='status ok';
+  if(S.fams.length) runMatch();
+}
+$('#b2bFile').addEventListener('change',e=>{
+  const file=e.target.files[0]; if(!file) return;
+  const fr=new FileReader();
+  fr.onload=()=>{ try{
+    const j=JSON.parse(fr.result);
+    const prods=Array.isArray(j)?j:(j.products||j.PRODS||[]);
+    const grps=Array.isArray(j)?[]:(j.groups||j.GRPS||[]);
+    ingestB2b(prods,grps);
+  }catch(err){ $('#b2bStatus').textContent='JSON okunamadı: '+err.message; $('#b2bStatus').className='status err'; } };
+  fr.readAsText(file);
+});
+$('#btnLogin').addEventListener('click',()=>$('#loginForm').classList.toggle('show'));
+$('#btnDoLogin').addEventListener('click',doFirebaseLoad);
+async function doFirebaseLoad(){
+  const email=$('#email').value.trim(), pass=$('#pass').value;
+  if(!email||!pass){ $('#b2bStatus').textContent='Email + šifra gerekli.'; $('#b2bStatus').className='status err'; return; }
+  $('#b2bStatus').textContent='Firebase bağlanıyor…'; $('#b2bStatus').className='status';
+  try{
+    const [{initializeApp},{getAuth,signInWithEmailAndPassword},{getFirestore,collection,getDocs}]=await Promise.all([
+      import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'),
+      import('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js'),
+      import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js')]);
+    const app=initializeApp({ apiKey:"AIzaSyCNiBBldrNLCBUJbsR5yZIgNIcfyP2Awm0",
+      authDomain:"golden-rose-siparis-562ad.firebaseapp.com", projectId:"golden-rose-siparis-562ad" });
+    await signInWithEmailAndPassword(getAuth(app),email,pass);
+    $('#b2bStatus').textContent='Veri çekiliyor…';
+    const db=getFirestore(app);
+    const [ps,gs]=await Promise.all([getDocs(collection(db,'products')), getDocs(collection(db,'groups'))]);
+    ingestB2b(ps.docs.map(d=>d.data()), gs.docs.map(d=>d.data()));
+    $('#loginForm').classList.remove('show'); $('#pass').value='';
+  }catch(err){
+    $('#b2bStatus').textContent='Giriş/okuma hatası: '+(err.code||err.message)+' — takılırsa Firebase Console → Authentication → Authorized domains kontrol et.';
+    $('#b2bStatus').className='status err';
+  }
+}
+$('#btnDemo').addEventListener('click',()=>{
+  const D=[201,202,203,204,205,206,207,208], st=[72,64,75,72,75,75,78,72], bc=['8691190569938','8691190569945','8691190569952','8691190569969','8691190569976','8691190569983','8691190569990','8691190570002'];
+  const DEMO=D.map((n,i)=>({name:'SILKY SHINE HYDRATING LIP. '+n, barcode:bc[i], stock:st[i], price:4.95, catNo:''}));
+  const variants=[]; for(let n=201;n<=224;n++) variants.push({option:'Silky Shine Hydrating Lipstick '+n, price:'5.80', img:'', num:String(n)});
+  S.fams=[{handle:'silky-shine-hydrating-lipstick', title:'Silky Shine Hydrating Lipstick', optName:'color', variants}];
+  $('#shopStatus').innerHTML='<b>1</b> ürün · <b>24</b> variant (demo).'; $('#shopStatus').className='status ok';
+  ingestB2b(DEMO,[{name:'Silky Shine Hydrating Lipstick', barcodes:bc}]);
+});
+
+/* ============ TABS + EXPORT ============ */
+$('#tabs').addEventListener('click',e=>{
+  const t=e.target.closest('.tab'); if(!t) return;
+  $('#tabs').querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active'); S.filter=t.dataset.f; renderList();
+});
+// sebep etiketi — teşhis için
+function dl(name,text){ const b=new Blob(['\ufeff'+text],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1500); }
+function csvCell(v){ v=String(v==null?'':v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
+function reasonOf(r){
+  if(r.outOfScope) return 'kapsam-dışı(GR-değil)';
+  if(r.shopifyOnly) return 'b2b-yok(shopify-only)';
+  if(r.collision) return 'çakışma(aynı-EAN)';
+  if(r.confirmed && r.b2bId!=null) return 'onaylı';
+  if(r.b2bId!=null) return 'öneri-onay-bekliyor';
+  if(r.num==null) return 'numara-yok(renk/isim)';
+  if(!r.hasGroup) return 'grup-seçilmedi';
+  return 'numara-grupta-yok';
+}
+function groupNameOf(r){
+  const f=S.fams.find(x=>x.handle===r.handle);
+  return (f && f.groupIdx!=null) ? S.groupIx[f.groupIdx].name : '';
+}
+// aktif sekmenin satırları
+function scopeRows(){
+  return allRows().filter(r=> S.filter==='all' || rowStatus(r)===S.filter);
+}
+$('#btnExportWork').addEventListener('click',()=>{
+  const rows=scopeRows();
+  if(!rows.length){ alert('Bu sekmede satır yok.'); return; }
+  // Çalışma + geri-yükleme şablonu. EAN/catNo tahminle önden dolu; yanlışları düzelt, boşları doldur.
+  const head=['Handle','Title','Option1 Name','Option1 Value','Shade','Reason','Guess b2b','EAN','catNo','Group','Score','Status'];
+  const lines=[head.join(',')];
+  rows.forEach(r=>{
+    const p=r.b2bId!=null?S.b2b[r.b2bId]:null;
+    lines.push([ r.handle, r.famTitle, r.optName||'Title', r.option, r.num??'',
+      reasonOf(r), p?p.name:'', p?p.barcode:'', p?p.catNo:'', groupNameOf(r),
+      Math.round((r.score||0)*100), rowStatus(r) ].map(csvCell).join(','));
+  });
+  const tab={all:'tumu',ready:'onayli',pending:'bekleyen',miss:'eslesmeyen'}[S.filter]||'tumu';
+  dl('gr-calisma-'+tab+'.csv', lines.join('\n'));
+});
+// AİLE-ÖZETİ CSV (ChatGPT'nin istediği sınıflandırma raporu — aile başına bir satır)
+$('#btnExportFam').addEventListener('click',()=>{
+  if(!S.fams.length){ alert('Önce yükle.'); return; }
+  const head=['Vendor','Handle','Title','Variants','SelectedGroup','TopScore','2ndGroup','2ndScore','Gap',
+              'Ready','Pending','Miss','Collision','Sonly','OutOfScope','Classification'];
+  const lines=[head.join(',')];
+  S.fams.forEach(f=>{
+    const cc={ready:0,pending:0,miss:0,sonly:0,oos:0}; let coll=0;
+    f.rows.forEach(r=>{ cc[rowStatus(r)]++; if(r.collision) coll++; });
+    const cand=f.groupCands||[];
+    const top=cand[0], sec=cand[1];
+    const g=f.groupIdx!=null?S.groupIx[f.groupIdx].name:'';
+    lines.push([ f.vendor||'', f.handle, f.title, f.variants.length, g,
+      top?Math.round(top.score*100):'', sec?S.groupIx[sec.gi].name:'', sec?Math.round(sec.score*100):'',
+      (top&&sec)?Math.round((top.score-sec.score)*100):'',
+      cc.ready, cc.pending, cc.miss, coll, cc.sonly, f.outOfScope?1:0, classifyFam(f)
+    ].map(csvCell).join(','));
+  });
+  dl('gr-aile-ozeti.csv', lines.join('\n'));
+});
+$('#btnExportCsv').addEventListener('click',()=>{
+  const ok=allRows().filter(r=>r.confirmed && r.b2bId!=null);
+  if(!ok.length){ alert('Onaylı eşleşme yok.'); return; }
+  // ÇİFT GÜVENLİK: hiçbir barkod export'ta 2 kez çıkamaz
+  const seenBC={}, dupBC=[];
+  ok.forEach(r=>{ const bc=S.b2b[r.b2bId].barcode; if(seenBC[bc]){ dupBC.push(bc); } seenBC[bc]=(seenBC[bc]||0)+1; });
+  if(dupBC.length){ collisionGuard(); renderAll();
+    alert('⚠ '+[...new Set(dupBC)].length+' barkod hâlâ birden çok variant\'ta — export durduruldu, çakışmalar temizlendi. Bekleyen sekmesini kontrol et.'); return; }
+  // dup catNo (SKU) uyarısı — barkod farklı ama catNo aynı = b2b veri sorunu
+  const catMap={}; ok.forEach(r=>{ const c=(S.b2b[r.b2bId].catNo||'').trim(); if(c)(catMap[c]=catMap[c]||new Set()).add(S.b2b[r.b2bId].barcode); });
+  const dupCat=Object.keys(catMap).filter(c=>catMap[c].size>1);
+  const head=['Handle','Title','Option1 Name','Option1 Value','Variant SKU','Variant Barcode'];
+  const lines=[head.join(',')];
+  ok.forEach(r=>{ const p=S.b2b[r.b2bId];
+    lines.push([r.handle,r.famTitle,r.optName||'Title',r.option,p.catNo||'',p.barcode].map(csvCell).join(',')); });
+  dl('shopify-import-identifiers.csv', lines.join('\n'));
+  if(dupCat.length) setFill(`⚠ ${dupCat.length} catNo birden çok barkodda (SKU dup, b2b veri) — barkod anahtar olduğu için sync güvenli, ama SKU'lar tekrar edecek.`, true);
+});
+// GERİ YÜKLE: doldurulmuş çalışma CSV'sinden EAN/catNo ile onayla
+let byCat=null;
+function catIndex(){ if(byCat) return byCat; byCat={}; S.b2b.forEach((p,i)=>{ const c=(p.catNo||'').trim(); if(c && byCat[c]==null) byCat[c]=i; }); return byCat; }
+$('#fillFile').addEventListener('change',e=>{
+  const file=e.target.files[0]; if(!file) return;
+  if(!S.b2b.length || !S.fams.length){ setFill('Önce b2b + Shopify yükle.',true); e.target.value=''; return; }
+  const fr=new FileReader();
+  fr.onload=()=>{ try{ applyFill(csvToObjects(fr.result)); }catch(err){ setFill('CSV okunamadı: '+err.message,true); } e.target.value=''; };
+  fr.readAsText(file);
+});
+function setFill(msg,err){ const el=$('#fillMsg'); el.textContent=msg; el.style.color=err?'var(--miss)':'var(--ok)'; }
+function applyFill(objs){
+  const idx={}; allRows().forEach(r=>{ idx[r.handle+'::'+r.option]=r; });
+  const cat=catIndex();
+  let applied=0, cleared=0, notfound=0, nomatch=0;
+  for(const o of objs){
+    const key=(o['Handle']||'')+'::'+(o['Option1 Value']||'');
+    const r=idx[key]; if(!r){ nomatch++; continue; }
+    const ean=String(o['EAN']||'').trim();
+    const cno=String(o['catNo']||'').trim();
+    if(ean){
+      const i=S.byBC[ean];
+      if(i==null){ notfound++; continue; }
+      r.b2bId=i; r.confirmed=true; applied++;
+    } else if(cno){
+      const i=cat[cno];
+      if(i==null){ notfound++; continue; }
+      r.b2bId=i; r.confirmed=true; applied++;
+    } else {
+      // boş bırakılmış → eşleşmeyi kaldır
+      if(r.b2bId!=null||r.confirmed){ r.b2bId=null; r.confirmed=false; cleared++; }
+    }
+  }
+  recompute();
+  setFill(`${applied} onaylandı${cleared?`, ${cleared} temizlendi`:''}${notfound?`, ${notfound} EAN/catNo bulunamadı`:''}${nomatch?`, ${nomatch} satır eşleşmedi`:''}${S.collisions?`, ⚠ ${S.collisions} çakışma`:''}.`, notfound>0||S.collisions>0);
+}
+
+renderList();
+</script>
+</body>
+</html>
