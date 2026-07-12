@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Golden Rose — Shopify ↔ B2B kimlik eşleştirme (Faza 0) · v1.0.1 fix: applyFill persistence -->
+<!-- Golden Rose — Shopify ↔ B2B kimlik eşleştirme (Faza 0) · v1.0.2 fix: sadece-değişeni-onayla + byCat invalidation -->
 <html lang="bs">
 <head>
 <meta charset="utf-8">
@@ -120,7 +120,7 @@
 <div class="wrap">
   <header class="top">
     <a href="/" class="backlink">← Golden Rose Tools</a>
-    <div class="eyebrow">Golden Rose · Faza 0 · <b style="color:var(--ink)">v1.0.1</b> · jednostavan tok</div>
+    <div class="eyebrow">Golden Rose · Faza 0 · <b style="color:var(--ink)">v1.0.2</b> · jednostavan tok</div>
     <h1>Shopify ↔ B2B <em>uparivanje</em></h1>
     <p class="lede">Prvo Shopify proizvod → B2B grupa (jedna odluka), pa broj unutar te grupe. Potvrđeni idu u Shopify import CSV (<b>SKU</b>=catNo, <b>Barcode</b>=EAN). B2B se samo čita.</p>
   </header>
@@ -713,6 +713,7 @@ $('#shopFile').addEventListener('change',e=>{
 
 /* ============ B2B SOURCES ============ */
 function ingestB2b(products, groups){
+  byCat=null;   // B2B verisi değişti → catNo index cache'ini geçersiz kıl
   S.b2b=products.map(p=>({ name:p.name||'', catNo:p.catNo||'', barcode:String(p.barcode||'').trim(),
     stock:p.stock??'', price:p.price??'', famTokens:famTokens(p.name), num:tailNum(p.name) })).filter(p=>p.barcode);
   S.groups=(groups||[]).map(g=>({name:g.name||'', barcodes:g.barcodes||[]}));
@@ -811,13 +812,15 @@ $('#btnExportWork').addEventListener('click',()=>{
   const rows=scopeRows();
   if(!rows.length){ alert('Nema redova u ovoj kartici.'); return; }
   // Çalışma + geri-yükleme şablonu. EAN/catNo tahminle önden dolu; yanlışları düzelt, boşları doldur.
-  const head=['Handle','Title','Option1 Name','Option1 Value','Shade','Reason','Guess b2b','EAN','catNo','Group','Score','Status'];
+  // OrigEAN/OrigCatNo = değişmez orijinal tahmin (DÜZENLEME); applyFill sadece değişeni onaylar.
+  const head=['Handle','Title','Option1 Name','Option1 Value','Shade','Reason','Guess b2b','EAN','catNo','Group','Score','Status','OrigEAN','OrigCatNo'];
   const lines=[head.join(',')];
   rows.forEach(r=>{
     const p=r.b2bId!=null?S.b2b[r.b2bId]:null;
+    const ean=p?p.barcode:'', cno=p?p.catNo:'';
     lines.push([ r.handle, r.famTitle, r.optName||'Title', r.option, r.num??'',
-      reasonOf(r), p?p.name:'', p?p.barcode:'', p?p.catNo:'', groupNameOf(r),
-      Math.round((r.score||0)*100), rowStatus(r) ].map(csvCell).join(','));
+      reasonOf(r), p?p.name:'', ean, cno, groupNameOf(r),
+      Math.round((r.score||0)*100), rowStatus(r), ean, cno ].map(csvCell).join(','));
   });
   const tab={all:'tumu',ready:'onayli',pending:'bekleyen',miss:'eslesmeyen'}[S.filter]||'tumu';
   dl('gr-calisma-'+tab+'.csv', lines.join('\n'));
@@ -874,27 +877,33 @@ function setFill(msg,err){ const el=$('#fillMsg'); el.textContent=msg; el.style.
 function applyFill(objs){
   const idx={}; allRows().forEach(r=>{ idx[r.handle+'::'+r.option]=r; });
   const cat=catIndex();
-  let applied=0, cleared=0, notfound=0, nomatch=0;
+  let applied=0, cleared=0, notfound=0, nomatch=0, skipped=0;
   for(const o of objs){
     const key=(o['Handle']||'')+'::'+(o['Option1 Value']||'');
     const r=idx[key]; if(!r){ nomatch++; continue; }
     const ean=String(o['EAN']||'').trim();
     const cno=String(o['catNo']||'').trim();
+    const origEan=String(o['OrigEAN']||'').trim();
+    const origCat=String(o['OrigCatNo']||'').trim();
     if(ean){
       const i=S.byBC[ean];
       if(i==null){ notfound++; continue; }
-      r.b2bId=i; r.confirmed=true; r.userPicked=true; applied++;
+      if(ean!==origEan){ r.b2bId=i; r.confirmed=true; r.userPicked=true; applied++; }   // SADECE elle değiştirilen
+      else { skipped++; }                                                                 // dokunulmamış tahmin → bırak
     } else if(cno){
       const i=cat[cno];
       if(i==null){ notfound++; continue; }
-      r.b2bId=i; r.confirmed=true; r.userPicked=true; applied++;
+      if(cno!==origCat){ r.b2bId=i; r.confirmed=true; r.userPicked=true; applied++; }
+      else { skipped++; }
     } else {
-      // boş bırakılmış → eşleşmeyi kaldır (kayıtlı override'ı da temizle)
-      if(r.b2bId!=null||r.confirmed||r.userPicked){ r.b2bId=null; r.confirmed=false; r.userPicked=false; cleared++; }
+      // EAN+catNo boş: eğer orijinalde tahmin VARDI ve kullanıcı sildiyse → eşleşmeyi kaldır (aksi halde dokunma)
+      const hadGuess = origEan || origCat;
+      if(hadGuess && (r.b2bId!=null||r.confirmed||r.userPicked)){ r.b2bId=null; r.confirmed=false; r.userPicked=false; cleared++; }
+      else skipped++;
     }
   }
   recompute();
-  setFill(`${applied} potvrđeno${cleared?`, ${cleared} očišćeno`:''}${notfound?`, ${notfound} EAN/catNo nije nađen`:''}${nomatch?`, ${nomatch} redova nespojeno`:''}${S.collisions?`, ⚠ ${S.collisions} konflikt`:''}.`, notfound>0||S.collisions>0);
+  setFill(`${applied} potvrđeno${cleared?`, ${cleared} očišćeno`:''}${skipped?`, ${skipped} nepromijenjeno`:''}${notfound?`, ${notfound} EAN/catNo nije nađen`:''}${nomatch?`, ${nomatch} redova nespojeno`:''}${S.collisions?`, ⚠ ${S.collisions} konflikt`:''}.`, notfound>0||S.collisions>0);
 }
 
 renderList();
