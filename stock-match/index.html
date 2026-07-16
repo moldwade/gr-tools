@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Golden Rose — Shopify ↔ B2B kimlik eşleştirme (Faza 0) · v1.1 aranabilir grup seçimi (200+ grup) -->
+<!-- Golden Rose — Shopify ↔ B2B kimlik eşleştirme (Faza 0) · v1.2 KRİTİK: export tüm variantları içerir (Shopify silme koruması) -->
 <html lang="bs">
 <head>
 <meta charset="utf-8">
@@ -120,7 +120,7 @@
 <div class="wrap">
   <header class="top">
     <a href="/" class="backlink">← Golden Rose Tools</a>
-    <div class="eyebrow">Golden Rose · Faza 0 · <b style="color:var(--ink)">v1.1</b> · pretraga grupa</div>
+    <div class="eyebrow">Golden Rose · Faza 0 · <b style="color:var(--ink)">v1.2</b> · pretraga grupa</div>
     <h1>Shopify ↔ B2B <em>uparivanje</em></h1>
     <p class="lede">Prvo Shopify proizvod → B2B grupa (jedna odluka), pa broj unutar te grupe. Potvrđeni idu u Shopify import CSV (<b>SKU</b>=catNo, <b>Barcode</b>=EAN). B2B se samo čita.</p>
   </header>
@@ -194,7 +194,7 @@
     <label class="btn">⬆︎ Popunjeni CSV<input type="file" id="fillFile" accept=".csv,text/csv"></label>
     <button id="btnExportFam">⬇︎ Sažetak proizvoda CSV</button>
     <button id="btnExportWork">⬇︎ Radni CSV (<span id="expTab">tümü</span>)</button>
-    <button id="btnExportCsv" class="primary">⬇︎ Shopify import CSV</button>
+    <button id="btnExportCsv" class="primary" title="Sadrži SVE varijante uparenih proizvoda — Shopify briše varijante koje nisu u fajlu!">⬇︎ Shopify import CSV</button>
   </div>
 </div>
 
@@ -345,19 +345,20 @@ function matchFamily(fam){
   if(fam.outOfScope){
     fam.rows = fam.variants.map(v=>({ vid:fam.handle+'::'+v.option, handle:fam.handle, famTitle:fam.title,
       optName:fam.optName, option:v.option, img:v.img, shopPrice:v.price, num:v.num, hasGroup:false,
-      b2bId:null, confirmed:false, score:0, opts:[], outOfScope:true }));
+      curSku:v.curSku, curBc:v.curBc, b2bId:null, confirmed:false, score:0, opts:[], outOfScope:true }));
     return;
   }
   if(fam.shopifyOnly){
     fam.rows = fam.variants.map(v=>({ vid:fam.handle+'::'+v.option, handle:fam.handle, famTitle:fam.title,
       optName:fam.optName, option:v.option, img:v.img, shopPrice:v.price, num:v.num, hasGroup:false,
-      b2bId:null, confirmed:false, score:0, opts:[], shopifyOnly:true }));
+      curSku:v.curSku, curBc:v.curBc, b2bId:null, confirmed:false, score:0, opts:[], shopifyOnly:true }));
     return;
   }
   const g = fam.groupIdx!=null ? S.groupIx[fam.groupIdx] : null;
   fam.rows = fam.variants.map(v=>{
     const r={ vid:fam.handle+'::'+v.option, handle:fam.handle, famTitle:fam.title, optName:fam.optName,
               option:v.option, img:v.img, shopPrice:v.price, num:v.num, hasGroup:!!g,
+              curSku:v.curSku, curBc:v.curBc,
               b2bId:null, confirmed:false, score:fam.groupScore||0, opts:[], shopifyOnly:false };
     if(g){
       r.opts=g.members.map(m=>m.i);                         // bu grubun tüm nijansaları
@@ -721,7 +722,8 @@ function loadShopFromRows(rows){
     if((r['Option1 Name']||'').trim() && !f.optName) f.optName=r['Option1 Name'].trim();
     if((r['Vendor']||'').trim() && !f.vendor) f.vendor=r['Vendor'].trim();
     const opt=(r['Option1 Value']||'').trim();
-    if(opt) f.variants.push({ option:opt, price:r['Variant Price']||'', img:(r['Image Src']||r['Variant Image']||'').trim(), num:tailNum(opt) });
+    if(opt) f.variants.push({ option:opt, price:r['Variant Price']||'', img:(r['Image Src']||r['Variant Image']||'').trim(), num:tailNum(opt),
+      curSku:String(r['Variant SKU']||'').trim(), curBc:String(r['Variant Barcode']||'').trim() });
   }
   S.fams=[...fams.values()].filter(f=>f.variants.length).map(f=>{
     if(!f.title) f.title=f.variants[0].option;
@@ -891,12 +893,27 @@ $('#btnExportCsv').addEventListener('click',()=>{
   // dup catNo (SKU) uyarısı — barkod farklı ama catNo aynı = b2b veri sorunu
   const catMap={}; ok.forEach(r=>{ const c=(S.b2b[r.b2bId].catNo||'').trim(); if(c)(catMap[c]=catMap[c]||new Set()).add(S.b2b[r.b2bId].barcode); });
   const dupCat=Object.keys(catMap).filter(c=>catMap[c].size>1);
+  // ⚠ KRİTİK: Shopify import'ta "Overwrite" ile CSV, ürünün variant LİSTESİNİ tanımlar.
+  // Dosyada olmayan variant SİLİNİR. Bu yüzden en az 1 eşleşmesi olan ürünün TÜM variantlarını yaz:
+  //   eşleşen  → yeni catNo + EAN
+  //   eşleşmeyen → Shopify'daki MEVCUT SKU/barkod (korunur, silinmez)
+  const matchedFams=new Set(ok.map(r=>r.handle));
   const head=['Handle','Title','Option1 Name','Option1 Value','Variant SKU','Variant Barcode'];
   const lines=[head.join(',')];
-  ok.forEach(r=>{ const p=S.b2b[r.b2bId];
-    lines.push([r.handle,r.famTitle,r.optName||'Title',r.option,p.catNo||'',p.barcode].map(csvCell).join(',')); });
+  let nNew=0, nKeep=0;
+  S.fams.forEach(f=>{
+    if(!matchedFams.has(f.handle)) return;              // legacy/oos/eşleşmesiz ürünlere hiç dokunma
+    f.rows.forEach(r=>{
+      let sku, bc;
+      if(r.confirmed && r.b2bId!=null){ const p=S.b2b[r.b2bId]; sku=p.catNo||''; bc=p.barcode; nNew++; }
+      else { sku=r.curSku||''; bc=r.curBc||''; nKeep++; }   // mevcut değerini koru
+      lines.push([f.handle, f.title, f.optName||'Title', r.option, sku, bc].map(csvCell).join(','));
+    });
+  });
   dl('shopify-import-identifiers.csv', lines.join('\n'));
-  if(dupCat.length) setFill(`⚠ ${dupCat.length} catNo birden çok barkodda (SKU dup, b2b veri) — barkod anahtar olduğu için sync güvenli, ama SKU'lar tekrar edecek.`, true);
+  let msg=`${nNew} novih barkodova · ${nKeep} varijanti zadržano (da se ne obrišu).`;
+  if(dupCat.length) msg+=` ⚠ ${dupCat.length} catNo na više barkodova (B2B podaci).`;
+  setFill(msg, dupCat.length>0);
 });
 // GERİ YÜKLE: doldurulmuş çalışma CSV'sinden EAN/catNo ile onayla
 let byCat=null;
