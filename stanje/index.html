@@ -91,7 +91,21 @@
   .stat-value.gold{color:#ffd700}
   .stat-value.green{color:#4ade80}
   .stat-value.red{color:#fca5a5}
-  
+
+  /* Skladište selektor */
+  .skl-select{display:flex;gap:10px;margin-bottom:22px}
+  .skl-btn{
+    flex:1;display:flex;flex-direction:column;gap:2px;align-items:flex-start;
+    padding:12px 16px;border-radius:12px;cursor:pointer;font-family:inherit;
+    background:rgba(255,255,255,0.03);border:1.5px solid rgba(255,255,255,0.12);
+    color:#888;transition:all 0.2s;text-align:left;
+  }
+  .skl-btn:hover{background:rgba(255,255,255,0.06)}
+  .skl-btn .skl-t{font-size:14px;font-weight:700}
+  .skl-btn .skl-s{font-size:11px;opacity:0.85}
+  .skl-btn.active[data-skl="vp"]{border-color:#16a34a;background:rgba(34,197,94,0.10);color:#86efac}
+  .skl-btn.active[data-skl="mp"]{border-color:#7c3aed;background:rgba(124,58,237,0.12);color:#c4b5fd}
+
   /* Table */
   .table-wrap{
     background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);
@@ -170,6 +184,18 @@
     </div>
     <a href="/" class="back-link">← Tools</a>
   </header>
+
+  <!-- Skladište selektor: koji skladište uvozimo (šalje se u B2B) -->
+  <div class="skl-select">
+    <button type="button" class="skl-btn active" data-skl="vp">
+      <span class="skl-t">🏬 Veleprodaja</span>
+      <span class="skl-s">šifra 1 · toptan → katalog</span>
+    </button>
+    <button type="button" class="skl-btn" data-skl="mp">
+      <span class="skl-t">📦 MP Arizona</span>
+      <span class="skl-s">šifra 10 · maloprodaja → stanje_mp</span>
+    </button>
+  </div>
 
   <!-- Drop zone -->
   <label class="dropzone" id="dropzone">
@@ -272,6 +298,19 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 const $ = id => document.getElementById(id);
 let parsedData = [];
 let csvContent = '';
+let skladiste = 'vp'; // 'vp' = veleprodaja (→ #import=stanje) | 'mp' = MP Arizona (→ #import=stanje_mp)
+
+// Skladište selektor — mijenja odredište slanja u B2B + labele (parsiranje je isto za oba)
+function setSkl(v){
+  skladiste = v;
+  document.querySelectorAll('.skl-btn').forEach(b => b.classList.toggle('active', b.dataset.skl === v));
+  const isMp = v === 'mp';
+  const sub = document.querySelector('.header-text .sub');
+  if(sub) sub.textContent = 'Konverzija PDF stanja zalihe u CSV · ' + (isMp ? 'MP Arizona (šif. 10)' : 'Veleprodaja (šif. 1)') + ' · 100% u browseru';
+  const sendBtn = document.getElementById('btnSendB2B');
+  if(sendBtn) sendBtn.textContent = isMp ? '📤 Pošalji u B2B (MP Arizona)' : '📤 Pošalji u B2B (Veleprodaja)';
+}
+document.querySelectorAll('.skl-btn').forEach(b => b.addEventListener('click', () => setSkl(b.dataset.skl)));
 
 // ============== Helpers ==============
 function showStatus(msg, type){
@@ -601,7 +640,7 @@ $('btnDownload').addEventListener('click', () => {
   const a = document.createElement('a');
   a.href = url;
   const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
-  a.download = `stanje_zalihe_${today}.csv`;
+  a.download = (skladiste === 'mp' ? `stanje_mp_arizona_${today}.csv` : `stanje_zalihe_${today}.csv`);
   a.click();
   URL.revokeObjectURL(url);
   showStatus('💾 CSV preuzet', 'success');
@@ -631,8 +670,10 @@ $('btnSendB2B').addEventListener('click', () => {
       return;
     }
     
-    const b2bUrl = 'https://b2b.goldenrose.ba/#import=stanje&data=' + encoded;
-    showStatus('📤 Otvaram B2B sistem... Prijavite se ako niste već.', 'info');
+    const importType = (skladiste === 'mp') ? 'stanje_mp' : 'stanje';
+    const sklName = (skladiste === 'mp') ? 'MP Arizona' : 'Veleprodaja';
+    const b2bUrl = 'https://b2b.goldenrose.ba/#import=' + importType + '&data=' + encoded;
+    showStatus(`📤 Otvaram B2B sistem — <strong>${sklName}</strong>. Prijavite se ako niste već.`, 'info');
     window.open(b2bUrl, '_blank');
   } catch(e) {
     console.error(e);
