@@ -96,6 +96,15 @@
   .quality-presets button.active{background:#1a8a4a;color:#fff;border-color:#1a8a4a}
   .compress-info{font-size:11px;color:#666;margin-top:6px;display:flex;gap:14px;flex-wrap:wrap}
   .compress-info b{color:#156d3b}
+
+  /* ── NOVO v4: analiza linka + bulk imena + swatch prefix ── */
+  textarea{width:100%;padding:9px 11px;border:1px solid #ccc;border-radius:6px;font-size:12px;font-family:monospace;resize:vertical;background:#fff}
+  textarea:focus{border-color:#c8333a;outline:none}
+  .card-del{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(200,51,58,0.85);color:#fff;font-size:13px;line-height:1;padding:0;z-index:2;opacity:0;transition:opacity 0.15s}
+  .card:hover .card-del{opacity:1}
+  .bulk-preview{border:1px solid #e0e0e0;border-radius:6px;padding:8px 10px;font-size:12px;max-height:180px;overflow-y:auto;background:#fafafa;line-height:1.7}
+  .bulk-preview .over{color:#c8333a;font-weight:600}
+  .prefix-preview{font-size:11px;color:#666;font-family:monospace;margin-top:3px;word-break:break-all}
 </style>
 </head>
 <body>
@@ -103,52 +112,82 @@
 <h1 style="display:flex;align-items:center;gap:14px">
   <img src="../gr-logo.png" alt="Golden Rose" style="height:40px;width:auto;filter:brightness(0)" />
   <span>Nijanse Tool</span>
-  <span class="badge">v3.1 ⚡</span>
+  <span class="badge">v4.0 ⚡</span>
 </h1>
 <div class="sub">Toplu thumbnail download · auto-rename · za Shopify · <span style="color:#1a8a4a;font-weight:600">⚡ Cloudflare Worker</span> · <span style="color:#1a8a4a;font-weight:600">🗜️ Auto-kompresija</span></div>
 
 <div class="help">
   <b>💡 Kako se koristi:</b>
-  <br>1. Pronađi raspon slika na <code>goldenrose.com.tr</code> (npr. <code>5118.jpg</code> do <code>5121.jpg</code>)
-  <br>2. Unesi početni ID slike (5118), početni broj nijanse (51), broj nijansi (4) i ime serije
-  <br>3. Klikni <b>"Učitaj"</b> — alat preuzima sve thumbnaile
-  <br>4. Pod svaku sliku upiši ime nijanse (Moonlit, Cosmos, Aurora...)
+  <br>1. Kopiraj <b>link proizvoda</b> sa <code>goldenrose.com.tr</code> i zalijepi ga dole
+  <br>2. Klikni <b>"🔍 Analiziraj"</b> — alat sam pronađe SVE nijanse <b>(radi i kad ID-evi slika nisu redom!)</b>
+  <br>3. Provjeri slike — pogrešnu nijansu ukloni klikom na <b>✕</b> u uglu kartice
+  <br>4. Upiši imena pod slike, ili sva odjednom u <b>"📝 Bulk imena"</b> (jedno ime po redu)
   <br>5. <b>(opciono)</b> Uključi <b>"🗜️ Kompresija"</b> ako želiš manje fajlove
-  <br>6. Klikni <b>"💾 Preuzmi sve (ZIP)"</b> — fajlovi se snimaju kao <code>"Sparkle Glow 51 Moonlit.jpg"</code>
+  <br>6. Klikni <b>"💾 Preuzmi sve (ZIP)"</b>
   <br><br><b>📦 ZIP sadrži 3 odvojene foldere:</b>
-  <br>🖼️ <b>Zoom_Velika</b> — velike slike za Shopify glavni proizvod
-  <br>📸 <b>Middle_Srednja</b> — srednje slike (thumbnail)
-  <br>🎨 <b>Swatch_Atributi</b> — male slike za color varijante (atributi)
-  <br><br><b>🎁 Bonus:</b> Imena se automatski pamte za istu seriju (sledeći put se vraćaju)
+  <br>🖼️ <b>Zoom_Velika</b> — velike slike za Shopify glavni proizvod — <code>"Matte Crayon 01 Nude.jpg"</code>
+  <br>📸 <b>Middle_Srednja</b> — srednje slike (thumbnail) — <code>"Matte Crayon 01 Nude.jpg"</code>
+  <br>🎨 <b>Swatch_Atributi</b> — male slike za color varijante — <b>PNG</b>, ime <code>"crayon-01.png"</code> (prefix možeš promijeniti prije downloada)
+  <br><br><b>🎁 Bonus:</b> Imena i swatch prefix se pamte za istu seriju · stari način (početni ID + broj) je pod <b>"⚙️ Manuel"</b>
 </div>
 
 <div class="panel">
-  <h2>📥 Učitavanje raspona slika</h2>
+  <h2>🔗 Učitavanje sa linka proizvoda</h2>
   <div class="row">
+    <div class="field wide" style="flex:4">
+      <label>Link proizvoda (goldenrose.com.tr)</label>
+      <input type="url" id="productUrl" placeholder="https://www.goldenrose.com.tr/en/product/210/lips-lip-pencil-matte-lipstick-crayon/1" />
+    </div>
     <div class="field wide">
       <label>Ime serije</label>
-      <input type="text" id="serija" placeholder="npr. Sparkle Glow Eyeshadow" />
-    </div>
-    <div class="field tiny">
-      <label>Početni ID slike</label>
-      <input type="number" id="startId" placeholder="5118" />
-    </div>
-    <div class="field tiny">
-      <label>Početni broj nijanse</label>
-      <input type="number" id="startNum" placeholder="51" />
-    </div>
-    <div class="field tiny">
-      <label>Broj nijansi</label>
-      <input type="number" id="count" placeholder="4" min="1" max="200" />
+      <input type="text" id="serija" placeholder="auto — popuni se sa stranice" />
     </div>
     <div>
-      <button onclick="loadShades()">Učitaj</button>
+      <button onclick="analyzeUrl()">🔍 Analiziraj</button>
     </div>
   </div>
-  <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-    <small style="color:#888;font-size:11px">Brzi presets:</small>
-    <button class="sm btn-grey" onclick="preset('Sparkle Glow Eyeshadow', 5118, 51, 4)">Sparkle Glow (5118, 51, 4)</button>
-    <button class="sm btn-grey" onclick="preset('Keratin Nail Color', 4170, 1, 80)">Keratin (4170, 01, 80)</button>
+  <div style="margin-top:10px">
+    <button class="sm btn-grey" onclick="toggleManualMode()">⚙️ Manuel (napredni: raspon ID-eva)</button>
+  </div>
+  <div id="manualMode" style="display:none;margin-top:10px;padding-top:10px;border-top:1px dashed #e0e0e0">
+    <div class="row">
+      <div class="field tiny">
+        <label>Početni ID slike</label>
+        <input type="number" id="startId" placeholder="5118" />
+      </div>
+      <div class="field tiny">
+        <label>Početni broj nijanse</label>
+        <input type="number" id="startNum" placeholder="51" />
+      </div>
+      <div class="field tiny">
+        <label>Broj nijansi</label>
+        <input type="number" id="count" placeholder="4" min="1" max="200" />
+      </div>
+      <div>
+        <button onclick="loadShades()">Učitaj</button>
+      </div>
+    </div>
+    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <small style="color:#888;font-size:11px">Brzi presets:</small>
+      <button class="sm btn-grey" onclick="preset('Sparkle Glow Eyeshadow', 5118, 51, 4)">Sparkle Glow (5118, 51, 4)</button>
+      <button class="sm btn-grey" onclick="preset('Keratin Nail Color', 4170, 1, 80)">Keratin (4170, 01, 80)</button>
+    </div>
+  </div>
+</div>
+
+<div id="pastePanel" class="panel" style="display:none">
+  <h2>📋 Ručno: zalijepi kod stranice</h2>
+  <div class="help" style="margin-bottom:10px">
+    Automatsko čitanje nije uspjelo. Uradi ovako:
+    <br>1. Otvori link proizvoda u novom tabu
+    <br>2. Pritisni <code>Ctrl+U</code> (prikaz izvornog koda stranice)
+    <br>3. <code>Ctrl+A</code> pa <code>Ctrl+C</code> (označi sve i kopiraj)
+    <br>4. Zalijepi ovdje i klikni <b>"Analiziraj kod"</b>
+  </div>
+  <textarea id="pageSource" rows="7" placeholder="&lt;html&gt;..."></textarea>
+  <div class="row" style="margin-top:8px">
+    <button onclick="analyzePasted()">Analiziraj kod</button>
+    <button class="sm btn-grey" onclick="document.getElementById('pastePanel').style.display='none'">Zatvori</button>
   </div>
 </div>
 
@@ -197,7 +236,7 @@
   </div>
   <div class="compress-info" id="compressInfo" style="display:none">
     <span>📏 Dimenzije: <b>nepromijenjene</b> (1000x1000)</span>
-    <span>📦 Format: <b>JPEG</b></span>
+    <span>📦 Format: <b>JPEG</b> <span style="color:#888">(samo Zoom/Middle — Swatch je PNG, bez kompresije)</span></span>
     <span>💾 Tipična ušteda: <b id="estSavings">~70%</b> manji fajl</span>
   </div>
 </div>
@@ -220,8 +259,30 @@
     <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px">
       <input type="checkbox" id="chkSwatch" checked />
       <span>🎨 Swatch (atributi)</span>
-      <span style="color:#888;font-size:10px">/kind/</span>
+      <span style="color:#888;font-size:10px">/kind/ · PNG</span>
     </label>
+    <div class="field" style="flex:0 1 260px;min-width:200px">
+      <label>🎨 Swatch prefix (za Shopify match)</label>
+      <input type="text" id="swatchPrefix" oninput="updateSwatchPreview()" onblur="saveSwatchPrefix()" placeholder="crayon" />
+      <div class="prefix-preview" id="swatchPreview"></div>
+    </div>
+  </div>
+</div>
+
+<div id="bulkPanel" class="panel" style="display:none">
+  <h2>📝 Bulk imena — jedno ime po redu</h2>
+  <div class="row" style="align-items:stretch">
+    <div class="field wide">
+      <label>Imena (red 1 → prva nijansa, red 2 → druga...)</label>
+      <textarea id="bulkNames" rows="7" oninput="updateBulkPreview()" placeholder="Nude&#10;Coral&#10;Ruby&#10;..."></textarea>
+    </div>
+    <div class="field wide">
+      <label>Pregled</label>
+      <div class="bulk-preview" id="bulkPreview"><span style="color:#aaa">Upiši imena lijevo — ovdje vidiš koje ime ide na koju nijansu...</span></div>
+    </div>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button class="btn-green" onclick="applyBulkNames()">✔ Primijeni imena</button>
   </div>
 </div>
 
@@ -242,6 +303,8 @@
 
 <script>
 const BASE_URL = 'https://www.goldenrose.com.tr/img/product/zoom/';
+// 🚀 Cloudflare Worker proxy — koristi se i za slike (ZIP) i za čitanje HTML-a stranice proizvoda
+const PROXY_URL = 'https://gr-proxy.tugay-goldenrose.workers.dev/?url=';
 let currentShades = []; // {imgId, colorNum, serija, name, status}
 let currentSerija = '';
 
@@ -365,6 +428,47 @@ async function compressBlob(blob, quality){
   });
 }
 
+// ── NOVO: Konverzija bloba u PNG (za Swatch fajlove) ──
+// Vraća null ako konverzija ne uspije — pozivalac tada task tretira kao grešku,
+// da JPEG bajtovi nikad ne završe u ZIP-u pod .png imenom.
+async function toPngBlob(blob){
+  // Već je PNG — nema potrebe za re-enkodiranjem
+  if(blob.type === 'image/png') return blob;
+  return new Promise((resolve)=>{
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(blob);
+    let resolved = false;
+    const finish = (val)=>{
+      if(resolved) return;
+      resolved = true;
+      URL.revokeObjectURL(objectUrl);
+      resolve(val);
+    };
+    img.onload = ()=>{
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        // Bez bijele pozadine — PNG ima alpha kanal, čuvamo ga
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob((pngBlob)=>{
+          // PNG je lossless pa je skoro uvijek veći od JPEG-a — to je očekivano,
+          // ne poredimo veličine (inače bismo vratili originalni JPEG).
+          finish(pngBlob && pngBlob.size > 100 ? pngBlob : null);
+        }, 'image/png');
+      } catch(e){
+        console.warn('PNG convert failed:', e);
+        finish(null);
+      }
+    };
+    img.onerror = ()=>finish(null);
+    img.src = objectUrl;
+    // Timeout safety
+    setTimeout(()=>finish(null), 10000);
+  });
+}
+
 function renderSavedList(){
   const data = loadSaved();
   const keys = Object.keys(data).sort((a,b)=>(data[b].lastUsed||0)-(data[a].lastUsed||0));
@@ -393,11 +497,20 @@ function renderSavedList(){
 
 function useSaved(serija){
   document.getElementById('serija').value = serija;
-  toast('Serija odabrana, unesi raspon');
-  document.getElementById('startId').focus();
+  toast('Serija odabrana — zalijepi link proizvoda ili koristi Manuel');
+  document.getElementById('productUrl').focus();
+}
+
+function toggleManualMode(){
+  const m = document.getElementById('manualMode');
+  m.style.display = m.style.display === 'none' ? 'block' : 'none';
+}
+function showManualMode(){
+  document.getElementById('manualMode').style.display = 'block';
 }
 
 function preset(serija, startId, startNum, count){
+  showManualMode();
   document.getElementById('serija').value = serija;
   document.getElementById('startId').value = startId;
   document.getElementById('startNum').value = startNum;
@@ -417,6 +530,211 @@ function toast(msg, dur){
   t.textContent = msg;
   document.body.appendChild(t);
   setTimeout(()=>t.remove(), dur);
+}
+
+// ── NOVO: slug za swatch imena — mala slova, bez razmaka i specijalnih znakova ──
+function slugify(s){
+  // đ i ı se ne razlažu kroz NFD, pa ih mapiramo ručno
+  const map = {'đ':'dj','Đ':'dj','ı':'i','İ':'i','ß':'ss','æ':'ae','Æ':'ae','ø':'o','Ø':'o','ł':'l','Ł':'l'};
+  return String(s)
+    .replace(/[đĐıİßæÆøØłŁ]/g, ch => map[ch])
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')  // č→c, š→s, ž→z, ö→o, ü→u, ğ→g, ş→s...
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+// ═══════════ NOVO v4: Analiza stranice proizvoda ═══════════
+// Umjesto pretpostavke da su ID-evi slika uzastopni (često NISU — nijanse se
+// dodaju u različitim periodima), čitamo HTML stranice proizvoda i vadimo
+// SVE ID-eve slika koje ona referencira.
+
+async function proxyFetchText(url, timeoutMs){
+  timeoutMs = timeoutMs || 15000;
+  const ctrl = new AbortController();
+  const tid = setTimeout(()=>ctrl.abort(), timeoutMs);
+  try {
+    const response = await fetch(PROXY_URL + encodeURIComponent(url), { signal: ctrl.signal });
+    if(!response.ok) throw new Error('HTTP ' + response.status);
+    return await response.text();
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
+// Da li tekst uopšte liči na stranicu proizvoda? Ako worker vrati grešku,
+// prazan odgovor ili nešto što nije ta stranica, vodimo korisnika na ručno lijepljenje.
+function looksLikeProductHtml(text){
+  return typeof text === 'string' && text.length > 500 && /img\/product\//i.test(text);
+}
+
+// Izvuci ID-eve slika iz sirovog HTML-a. Regex nad stringom (ne DOMParser) da
+// uhvati src, data-src, srcset, inline JSON i CSS pozadine istim putem.
+// Vraća [{imgId, pos}] — prvi put viđeni redoslijed, bez duplikata.
+// Napomena: mogu se pokupiti i slike "povezanih proizvoda" — zato grid ima ✕
+// dugme za uklanjanje pogrešnih nijansi prije downloada.
+function extractShadeIds(html){
+  const seen = new Map();
+  const primary = /img\/product\/(?:zoom|middle|kind|thumb|small|large|original)\/(\d{2,7})\.(?:jpe?g|png|webp|gif)/gi;
+  let m;
+  while((m = primary.exec(html)) !== null){
+    const id = parseInt(m[1]);
+    if(!seen.has(id)) seen.set(id, m.index);
+  }
+  if(seen.size === 0){
+    // Labaviji rezervni obrazac ako se struktura foldera promijeni
+    const loose = /img\/product\/[\w\/-]*?(\d{3,7})(?:\.\w{3,4})?["'\s)\\,]/gi;
+    while((m = loose.exec(html)) !== null){
+      const id = parseInt(m[1]);
+      if(!seen.has(id)) seen.set(id, m.index);
+    }
+  }
+  return [...seen.entries()].map(([imgId, pos]) => ({imgId, pos}));
+}
+
+// Pokušaj upariti broj nijanse (01, 02...) sa svakim ID-em gledajući HTML oko
+// mjesta gdje se slika pominje. Pravilo sve-ili-ništa: koristimo brojeve SAMO
+// ako je svaki ID dobio broj i svi su različiti — djelimično uparivanje bi dalo
+// tiho pogrešnu mješavinu, a predvidljivo 1..N je bolje od toga.
+function pairColorNumbers(html, idEntries){
+  const result = new Map();
+  const patterns = [
+    /data-(?:color|no|num|number|renk)\s*=\s*["']?0*(\d{1,3})/gi,
+    /(?:\bno|\bnr|\brenk|\bcolor)[.:\s#-]{0,3}0*(\d{1,3})\b/gi,
+    /(?:alt|title)\s*=\s*["'][^"']*?\b0*(\d{1,3})\b[^"']*["']/gi,
+    />\s*0*(\d{1,3})\s*</g
+  ];
+  for(const e of idEntries){
+    const start = Math.max(0, e.pos - 300);
+    const win = html.slice(start, e.pos + 500);
+    const imgIdx = e.pos - start; // pozicija slike unutar prozora
+    let num = null;
+    for(const p of patterns){
+      // Prozor može zahvatiti i susjednu nijansu — zato ne uzimamo PRVI pogodak
+      // nego onaj NAJBLIŽI mjestu gdje se slika pominje.
+      p.lastIndex = 0;
+      let best = null, bestDist = Infinity, m;
+      while((m = p.exec(win)) !== null){
+        const n = parseInt(m[1]);
+        if(n < 1 || n > 999) continue;
+        const dist = Math.abs(m.index - imgIdx);
+        if(dist < bestDist){ bestDist = dist; best = n; }
+      }
+      if(best !== null){ num = best; break; }
+    }
+    if(num === null) return null;
+    result.set(e.imgId, num);
+  }
+  const nums = [...result.values()];
+  if(new Set(nums).size !== nums.length) return null;
+  return result;
+}
+
+// 'lips-lip-pencil-matte-lipstick-crayon' -> 'Lips Lip Pencil Matte Lipstick Crayon'
+function slugFromUrl(url){
+  try {
+    const segs = new URL(url).pathname.split('/').filter(s => /^[a-z0-9]+(?:-[a-z0-9]+)+$/i.test(s));
+    if(segs.length === 0) return '';
+    const longest = segs.reduce((a, b) => b.length > a.length ? b : a);
+    return longest.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  } catch(e){ return ''; }
+}
+
+function titleFromHtml(html){
+  let m = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || html.match(/<title>([\s\S]*?)<\/title>/i);
+  if(!m) return '';
+  return m[1]
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(/\s*[|·]\s*/)[0]
+    .trim();
+}
+
+async function analyzeUrl(){
+  const url = document.getElementById('productUrl').value.trim();
+  if(!url){
+    toast('Zalijepi link proizvoda');
+    document.getElementById('productUrl').focus();
+    return;
+  }
+  if(!url.includes('goldenrose.com.tr')){
+    toast('⚠ Link nije sa goldenrose.com.tr — pokušavam svejedno', 3000);
+  }
+  document.getElementById('loading').classList.add('show');
+  document.getElementById('loadingText').textContent = 'Čitam stranicu proizvoda...';
+  document.getElementById('progressBar').style.width = '0%';
+  let html = null;
+  try { html = await proxyFetchText(url); } catch(e){ console.warn('Proxy HTML fetch failed:', e.message); }
+  if(!html || !looksLikeProductHtml(html)){
+    document.getElementById('loading').classList.remove('show');
+    const pp = document.getElementById('pastePanel');
+    pp.style.display = 'block';
+    pp.scrollIntoView({behavior: 'smooth'});
+    toast('Automatsko čitanje nije uspjelo — kopiraj kod stranice (uputstvo ispod)', 4000);
+    return;
+  }
+  await applyParsedShades(html, url);
+}
+
+function analyzePasted(){
+  const text = document.getElementById('pageSource').value;
+  if(!text || text.length < 100){
+    toast('Zalijepi kompletan kod stranice (Ctrl+U → Ctrl+A → Ctrl+C)');
+    return;
+  }
+  applyParsedShades(text, document.getElementById('productUrl').value.trim()).then(ok => {
+    if(ok) document.getElementById('pastePanel').style.display = 'none';
+  });
+}
+
+async function applyParsedShades(html, sourceUrl){
+  const ids = extractShadeIds(html);
+  if(ids.length === 0){
+    document.getElementById('loading').classList.remove('show');
+    document.getElementById('pastePanel').style.display = 'block';
+    toast('Nijedna slika proizvoda nije pronađena u kodu', 3500);
+    return false;
+  }
+  if(ids.length > 200){
+    if(!confirm(`${ids.length} slika je puno! Stvarno učitati?`)){
+      document.getElementById('loading').classList.remove('show');
+      return false;
+    }
+  }
+  const pairs = pairColorNumbers(html, ids);
+
+  // Ime serije: ono što je korisnik upisao > naslov stranice > iz linka
+  let serija = document.getElementById('serija').value.trim()
+    || titleFromHtml(html)
+    || (sourceUrl ? slugFromUrl(sourceUrl) : '');
+  if(!serija){
+    document.getElementById('loading').classList.remove('show');
+    toast('Unesi ime serije pa klikni ponovo');
+    document.getElementById('serija').focus();
+    return false;
+  }
+  document.getElementById('serija').value = serija;
+
+  currentSerija = serija;
+  currentShades = [];
+  const saved = loadSaved();
+  const memoryNames = saved[serija]?.names || {};
+  ids.forEach((e, i) => {
+    const imgId = e.imgId;
+    currentShades.push({
+      imgId,
+      colorNum: pairs ? pairs.get(imgId) : (i + 1),
+      serija,
+      name: memoryNames[String(imgId)] || '',
+      status: 'pending'
+    });
+  });
+
+  await probeAndShow();
+  toast(`Pronađeno ${ids.length} nijansi (${pairs ? 'brojevi sa stranice' : 'brojevi 1..' + ids.length}) — provjeri slike i ukloni pogrešne sa ✕`, 5000);
+  return true;
 }
 
 async function loadShades(){
@@ -452,16 +770,22 @@ async function loadShades(){
     });
   }
   
+  await probeAndShow();
+}
+
+// Zajednički rep za oba načina učitavanja (manuelni raspon i analiza linka):
+// provjeri postojanje slika pa prikaži grid i panele
+async function probeAndShow(){
   // Show loading
   document.getElementById('loading').classList.add('show');
   document.getElementById('empty').style.display = 'none';
   document.getElementById('resultsBar').style.display = 'none';
   document.getElementById('grid').innerHTML = '';
-  
+
   // Test image existence (HEAD requests in parallel batches)
   const batchSize = 10;
   let done = 0;
-  
+
   for(let b = 0; b < currentShades.length; b += batchSize){
     const batch = currentShades.slice(b, b + batchSize);
     await Promise.all(batch.map(async (sh) => {
@@ -484,13 +808,16 @@ async function loadShades(){
     }));
     renderGrid();  // progressive render
   }
-  
+
   document.getElementById('loading').classList.remove('show');
   renderGrid();
   updateStats();
   document.getElementById('resultsBar').style.display = 'flex';
   document.getElementById('compressPanel').style.display = 'block';
   document.getElementById('formatBar').style.display = 'flex';
+  document.getElementById('bulkPanel').style.display = 'block';
+  initSwatchPrefix();
+  updateBulkPreview();
 }
 
 function renderGrid(){
@@ -500,6 +827,7 @@ function renderGrid(){
     const isErr = sh.status === 'error';
     const colorPad = String(sh.colorNum).padStart(2, '0');
     return `<div class="card ${isErr?'error':''}">
+      <button class="card-del" onclick="removeShade(${idx})" title="Ukloni ovu nijansu">×</button>
       <div class="img-wrap">
         ${isErr ? '<div style="color:#aaa;font-size:11px">N/A</div>' :
           `<img src="${url}" loading="lazy" onclick="lightbox('${url}')" alt="${colorPad}" />`
@@ -575,6 +903,89 @@ function clearAll(){
   updateStats();
 }
 
+// ── NOVO v4: uklanjanje pogrešne nijanse iz prikaza (memorija ostaje) ──
+function removeShade(idx){
+  if(!currentShades[idx]) return;
+  currentShades.splice(idx, 1);
+  renderGrid();
+  updateStats();
+  updateBulkPreview();
+  updateSwatchPreview();
+}
+
+// ── NOVO v4: Bulk imena — jedno ime po redu ──
+function bulkLines(){
+  const lines = document.getElementById('bulkNames').value.split('\n').map(l => l.trim());
+  while(lines.length && lines[lines.length - 1] === '') lines.pop();
+  return lines;
+}
+
+function updateBulkPreview(){
+  const box = document.getElementById('bulkPreview');
+  const lines = bulkLines();
+  if(lines.length === 0){
+    box.innerHTML = '<span style="color:#aaa">Upiši imena lijevo — ovdje vidiš koje ime ide na koju nijansu...</span>';
+    return;
+  }
+  box.innerHTML = lines.map((name, i) => {
+    const sh = currentShades[i];
+    if(!sh) return `<div class="over">? → ${escapeHtml(name)} <small>(višak — ignoriše se)</small></div>`;
+    const colorPad = String(sh.colorNum).padStart(2, '0');
+    return `<div><b>${colorPad}</b> → ${name ? escapeHtml(name) : '<span style="color:#aaa">(prazno — ime ostaje)</span>'}</div>`;
+  }).join('');
+}
+
+function applyBulkNames(){
+  const lines = bulkLines();
+  if(lines.length === 0){ toast('Upiši imena u polje lijevo'); return; }
+  let applied = 0;
+  const n = Math.min(lines.length, currentShades.length);
+  for(let i = 0; i < n; i++){
+    // prazan red ne dira postojeće ime (sigurni merge)
+    if(lines[i]){
+      currentShades[i].name = lines[i];
+      applied++;
+    }
+  }
+  renderGrid();
+  updateStats();
+  saveCurrentNames();
+  let msg = `✓ Primijenjeno ${applied} imena`;
+  if(lines.length > currentShades.length) msg += ` · ⚠ ${lines.length - currentShades.length} redova viška ignorisano`;
+  else if(lines.length < currentShades.length) msg += ` · popunjene prve ${lines.length} od ${currentShades.length} nijansi`;
+  toast(msg, 4000);
+}
+
+// ── NOVO v4: Swatch prefix — dosljedan slug za Shopify match ──
+function getSwatchPrefix(){
+  const raw = document.getElementById('swatchPrefix').value;
+  return slugify(raw) || slugify(currentSerija) || 'swatch';
+}
+
+function initSwatchPrefix(){
+  const saved = loadSaved();
+  const stored = currentSerija ? saved[currentSerija]?.swatchPrefix : '';
+  document.getElementById('swatchPrefix').value = stored || slugify(currentSerija);
+  updateSwatchPreview();
+}
+
+function updateSwatchPreview(){
+  const el = document.getElementById('swatchPreview');
+  const prefix = getSwatchPrefix();
+  const sample = currentShades.slice(0, 3).map(sh => `${prefix}-${String(sh.colorNum).padStart(2, '0')}.png`);
+  el.textContent = sample.length ? sample.join(', ') + (currentShades.length > 3 ? ', …' : '') : `${prefix}-01.png`;
+}
+
+// Odvojeno od saveData() — ne diramo merge logiku za imena
+function saveSwatchPrefix(){
+  if(!currentSerija) return;
+  const data = loadSaved();
+  if(!data[currentSerija]) data[currentSerija] = {names:{}, lastUsed: Date.now()};
+  data[currentSerija].swatchPrefix = getSwatchPrefix();
+  localStorage.setItem('gr-nijanse-data', JSON.stringify(data));
+  updateSwatchPreview();
+}
+
 function copyAllUrls(){
   const urls = currentShades.filter(s=>s.status==='ok').map(s=>BASE_URL + s.imgId + '.jpg').join('\n');
   navigator.clipboard.writeText(urls).then(()=>{
@@ -588,7 +999,8 @@ async function downloadZip(){
   
   // Save names first
   saveCurrentNames();
-  
+  saveSwatchPrefix();
+
   // Hangi versiyonları indireceğiz?
   const downloadZoom = document.getElementById('chkZoom')?.checked !== false;
   const downloadMiddle = document.getElementById('chkMiddle')?.checked !== false;
@@ -622,18 +1034,20 @@ async function downloadZip(){
   const startTime = Date.now();
   
   // Build all download tasks
+  const swatchPrefix = getSwatchPrefix();
   const tasks = [];
   for(const sh of okShades){
     const colorPad = String(sh.colorNum).padStart(2, '0');
-    const baseFilename = sh.name 
-      ? `${currentSerija} ${colorPad} ${sh.name}.jpg`
-      : `${currentSerija} ${colorPad}.jpg`;
-    
+    // Zoom/Middle: "Serija NN Ime.jpg" · Swatch ima svoje slug ime (prefix-NN.png)
+    const baseName = sh.name
+      ? `${currentSerija} ${colorPad} ${sh.name}`
+      : `${currentSerija} ${colorPad}`;
+
     if(downloadZoom){
       tasks.push({
         url: 'https://www.goldenrose.com.tr/img/product/zoom/' + sh.imgId + '.jpg',
         folder: folderZoom,
-        filename: baseFilename,
+        filename: baseName + '.jpg',
         format: 'Zoom'
       });
     }
@@ -641,7 +1055,7 @@ async function downloadZip(){
       tasks.push({
         url: 'https://www.goldenrose.com.tr/img/product/middle/' + sh.imgId + '.jpg',
         folder: folderMiddle,
-        filename: baseFilename,
+        filename: baseName + '.jpg',
         format: 'Middle'
       });
     }
@@ -652,20 +1066,18 @@ async function downloadZip(){
           'https://www.goldenrose.com.tr/img/product/kind/' + sh.imgId + '.png',
         ],
         folder: folderSwatch,
-        filename: baseFilename,
+        // Shopify color-varijanta match: mala slova, bez razmaka, npr. crayon-01.png
+        filename: `${swatchPrefix}-${colorPad}.png`,
         format: 'Swatch',
         isSwatch: true
       });
     }
   }
   
-  // 🚀 KESİN ÇÖZÜM: Cloudflare Worker proxy
-  // Senin kendi proxy'n, sınırsız, hızlı, güvenilir
-  const PROXY_URL = 'https://gr-proxy.tugay-goldenrose.workers.dev/?url=';
-  
   // Canvas-based fallback (eğer proxy down olursa)
-  async function fetchViaCanvas(url, timeoutMs){
+  async function fetchViaCanvas(url, timeoutMs, mime){
     timeoutMs = timeoutMs || 8000;
+    mime = mime || 'image/jpeg';
     return new Promise((resolve)=>{
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -681,7 +1093,7 @@ async function downloadZip(){
           canvas.toBlob((blob)=>{
             if(blob && blob.size > 100) finish(blob);
             else finish(null);
-          }, 'image/jpeg', 0.95);
+          }, mime, mime === 'image/png' ? undefined : 0.95);
         } catch(e) { finish(null); }
       };
       img.onerror = ()=>finish(null);
@@ -690,9 +1102,9 @@ async function downloadZip(){
     });
   }
   
-  async function fetchSingle(url, timeoutMs){
+  async function fetchSingle(url, timeoutMs, mime){
     timeoutMs = timeoutMs || 10000;
-    
+
     // PRIMARY: Cloudflare Worker proxy (najbrži i najpouzdaniji)
     try {
       const ctrl = new AbortController();
@@ -710,7 +1122,7 @@ async function downloadZip(){
     }
     
     // FALLBACK: Canvas (ako worker ne radi)
-    return await fetchViaCanvas(url, 5000);
+    return await fetchViaCanvas(url, 5000, mime);
   }
   
   async function processTask(task){
@@ -718,19 +1130,24 @@ async function downloadZip(){
     if(task.isSwatch){
       // Try multiple swatch URL patterns
       for(const u of task.urls){
-        blob = await fetchSingle(u, 4000);
+        blob = await fetchSingle(u, 4000, 'image/png');
         if(blob) break;
       }
+      // Swatch mora biti pravi PNG — izvor je JPEG, pa konvertujemo.
+      // Ako konverzija padne, blob postaje null i task se broji kao greška
+      // (radije nego da JPEG bajtovi završe u ZIP-u pod .png imenom).
+      if(blob) blob = await toPngBlob(blob);
     } else {
       blob = await fetchSingle(task.url, 6000);
     }
     if(blob){
-      const originalSize = blob.size;
-      totalOriginalBytes += originalSize;
-      
+      totalOriginalBytes += blob.size;
+
       // ── NOVO: Primijeni kompresiju ako je uključena ──
+      // Swatch se preskače: PNG je lossless, toBlob ignoriše quality,
+      // a bijela pozadina iz compressBlob bi uništila alpha kanal.
       let finalBlob = blob;
-      if(compressEnabled){
+      if(compressEnabled && !task.isSwatch){
         try {
           finalBlob = await compressBlob(blob, compressQuality);
         } catch(e){
@@ -738,7 +1155,7 @@ async function downloadZip(){
           finalBlob = blob; // Fallback na original
         }
       }
-      
+
       totalFinalBytes += finalBlob.size;
       task.folder.file(task.filename, finalBlob);
     } else {
