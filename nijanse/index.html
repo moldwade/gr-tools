@@ -112,7 +112,7 @@
 <h1 style="display:flex;align-items:center;gap:14px">
   <img src="../gr-logo.png" alt="Golden Rose" style="height:40px;width:auto;filter:brightness(0)" />
   <span>Nijanse Tool</span>
-  <span class="badge">v4.1 ⚡</span>
+  <span class="badge">v4.2 ⚡</span>
 </h1>
 <div class="sub">Toplu thumbnail download · auto-rename · za Shopify · <span style="color:#1a8a4a;font-weight:600">⚡ Cloudflare Worker</span> · <span style="color:#1a8a4a;font-weight:600">🗜️ Auto-kompresija</span></div>
 
@@ -582,23 +582,62 @@ function normalizeHtml(text){
 // dugme za uklanjanje pogrešnih nijansi prije downloada.
 function extractShadeIds(html){
   html = normalizeHtml(html);
-  const seen = new Map();
-  // Bilo koji podfolder od img/product — folderi variraju po tipu proizvoda
-  const primary = /img\/product\/[a-z0-9_-]+\/(\d{2,7})\.(?:jpe?g|png|webp|gif)/gi;
-  let m;
-  while((m = primary.exec(html)) !== null){
-    const id = parseInt(m[1]);
-    if(!seen.has(id)) seen.set(id, m.index);
-  }
-  if(seen.size === 0){
-    // Labaviji rezervni obrazac ako se struktura foldera promijeni
-    const loose = /img\/product\/[\w\/-]*?(\d{3,7})(?:\.\w{3,4})?["'\s)\\,]/gi;
-    while((m = loose.exec(html)) !== null){
+  const collect = (re) => {
+    const seen = new Map();
+    let m;
+    while((m = re.exec(html)) !== null){
       const id = parseInt(m[1]);
       if(!seen.has(id)) seen.set(id, m.index);
     }
+    return seen;
+  };
+  // 1) /kind/ su BAŠ swatch slike color varijanti — "povezani proizvodi" sekcije
+  //    koriste druge foldere, pa ovaj filter čisti tuđe proizvode iz rezultata
+  let seen = collect(/img\/product\/kind\/(\d{2,7})\.(?:jpe?g|png|webp|gif)/gi);
+  // 2) Premalo kind pogodaka? Tip proizvoda možda koristi drugi folder — uzmi sve
+  if(seen.size < 3){
+    seen = collect(/img\/product\/[a-z0-9_-]+\/(\d{2,7})\.(?:jpe?g|png|webp|gif)/gi);
+  }
+  // 3) Labaviji rezervni obrazac ako se struktura potpuno promijeni
+  if(seen.size === 0){
+    seen = collect(/img\/product\/[\w\/-]*?(\d{3,7})(?:\.\w{3,4})?["'\s)\\,]/gi);
   }
   return [...seen.entries()].map(([imgId, pos]) => ({imgId, pos}));
+}
+
+// ── NOVO v4.2: sondiranje ID praznina ──
+// Stranica često NE referencira sve nijanse (dio se učitava kroz JS tek na klik),
+// ali slike postoje na serveru sa ID-evima IZMEĐU pronađenih (ista serija se
+// dodaje u istom batchu). Male unutrašnje praznine (≤10) su gotovo sigurno
+// skrivene nijanse istog proizvoda; velike praznine su tuđi proizvodi — preskaču se.
+function gapCandidates(ids){
+  const sorted = [...new Set(ids)].sort((a, b) => a - b);
+  const out = [];
+  for(let i = 1; i < sorted.length; i++){
+    const gap = sorted[i] - sorted[i-1];
+    if(gap > 1 && gap <= 11){
+      for(let id = sorted[i-1] + 1; id < sorted[i]; id++) out.push(id);
+    }
+  }
+  return out.slice(0, 60);
+}
+
+// Brza provjera postojanja slika (Image() kao u probeAndShow) — vraća Set postojećih
+async function probeIdsExist(ids){
+  const exists = new Set();
+  const batchSize = 10;
+  for(let b = 0; b < ids.length; b += batchSize){
+    await Promise.all(ids.slice(b, b + batchSize).map(id => new Promise((resolve) => {
+      const img = new Image();
+      let done = false;
+      const fin = (ok) => { if(!done){ done = true; if(ok) exists.add(id); resolve(); } };
+      img.onload = () => fin(true);
+      img.onerror = () => fin(false);
+      img.src = BASE_URL + id + '.jpg';
+      setTimeout(() => fin(false), 6000);
+    })));
+  }
+  return exists;
 }
 
 // Pokušaj upariti broj nijanse (01, 02...) sa svakim ID-em gledajući HTML oko
@@ -777,6 +816,48 @@ async function applyParsedShades(htmlPages, sourceUrl){
     }
   }
 
+  // ── Sondiranje ID praznina: nijanse koje stranica ne referencira (JS ih
+  // učitava naknadno) obično imaju ID-eve između pronađenih. Provjerimo ih.
+  let gapAdded = [];
+  try {
+    const cands = gapCandidates(orderedIds).filter(id => !seen.has(id));
+    if(cands.length){
+      document.getElementById('loading').classList.add('show');
+      document.getElementById('loadingText').textContent = `Tražim skrivene nijanse (${cands.length} ID praznina)...`;
+      const found = await probeIdsExist(cands);
+      gapAdded = cands.filter(id => found.has(id)).sort((a, b) => a - b);
+    }
+  } catch(e){ console.warn('Gap probe failed:', e); }
+  // Ubaci svaki pronađeni ID odmah iza njegovog numeričkog prethodnika
+  for(const id of gapAdded){
+    let idx = -1;
+    for(let i = 0; i < orderedIds.length; i++){
+      if(orderedIds[i] < id && (idx === -1 || orderedIds[i] > orderedIds[idx])) idx = i;
+    }
+    orderedIds.splice(idx + 1, 0, id);
+  }
+  // Brojevi za popunjene ID-eve: interpolacija između susjeda (npr. između
+  // broja 3 i broja 5 jedna praznina = broj 4). Ako se ne uklapa — sve na 1..N.
+  if(pairingOk && gapAdded.length){
+    for(let i = 0; i < orderedIds.length && pairingOk; ){
+      if(pairsAll.has(orderedIds[i])){ i++; continue; }
+      let j = i;
+      while(j < orderedIds.length && !pairsAll.has(orderedIds[j])) j++;
+      const prevNum = i > 0 ? pairsAll.get(orderedIds[i-1]) : null;
+      const nextNum = j < orderedIds.length ? pairsAll.get(orderedIds[j]) : null;
+      if(prevNum == null || nextNum == null || nextNum - prevNum - 1 < j - i){
+        pairingOk = false;
+        break;
+      }
+      for(let k = i; k < j; k++) pairsAll.set(orderedIds[k], prevNum + 1 + (k - i));
+      i = j;
+    }
+    if(pairingOk){
+      const nums = orderedIds.map(id => pairsAll.get(id));
+      if(nums.some(v => v == null) || new Set(nums).size !== nums.length) pairingOk = false;
+    }
+  }
+
   // Ime serije: ono što je korisnik upisao > naslov stranice > iz linka
   let serija = document.getElementById('serija').value.trim()
     || titleFromHtml(pages[0])
@@ -805,7 +886,8 @@ async function applyParsedShades(htmlPages, sourceUrl){
 
   await probeAndShow();
   const pageTxt = pages.length > 1 ? ` sa ${pages.length} stranice` : '';
-  toast(`Pronađeno ${orderedIds.length} nijansi${pageTxt} (${pairingOk ? 'brojevi sa stranice' : 'brojevi 1..' + orderedIds.length}) — provjeri slike i ukloni pogrešne sa ✕`, 5000);
+  const gapTxt = gapAdded.length ? ` · +${gapAdded.length} skrivenih iz ID praznina` : '';
+  toast(`Pronađeno ${orderedIds.length} nijansi${pageTxt}${gapTxt} (${pairingOk ? 'brojevi sa stranice' : 'brojevi 1..' + orderedIds.length}) — provjeri slike i ukloni pogrešne sa ✕`, 6000);
   return true;
 }
 
