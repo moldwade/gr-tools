@@ -112,7 +112,7 @@
 <h1 style="display:flex;align-items:center;gap:14px">
   <img src="../gr-logo.png" alt="Golden Rose" style="height:40px;width:auto;filter:brightness(0)" />
   <span>Nijanse Tool</span>
-  <span class="badge">v4.3 ⚡</span>
+  <span class="badge">v4.4 ⚡</span>
 </h1>
 <div class="sub">Toplu thumbnail download · auto-rename · za Shopify · <span style="color:#1a8a4a;font-weight:600">⚡ Cloudflare Worker</span> · <span style="color:#1a8a4a;font-weight:600">🗜️ Auto-kompresija</span></div>
 
@@ -284,6 +284,15 @@
   </div>
   <div class="row" style="margin-top:8px">
     <button class="btn-green" onclick="applyBulkNames()">✔ Primijeni imena</button>
+  </div>
+  <div class="row" style="margin-top:12px;padding-top:10px;border-top:1px dashed #e0e0e0">
+    <div class="field wide">
+      <label>➕ Nedostaje nijansa? Zalijepi link slike ili ID (desni klik na sliku boje → "Kopiraj adresu slike")</label>
+      <input type="text" id="extraIds" placeholder="https://www.goldenrose.com.tr/img/product/kind/5123.jpg — ili samo: 5123, 5124" />
+    </div>
+    <div>
+      <button class="btn-blue" onclick="addExtraShades()">➕ Dodaj</button>
+    </div>
   </div>
 </div>
 
@@ -854,35 +863,10 @@ async function applyParsedShades(htmlPages, sourceUrl){
     }
   }
 
-  // ── Sondiranje REPA serije: NAJNOVIJE nijanse (dodane kasnije) često uopšte
-  // nisu u HTML-u — postoje samo na serveru, na ID-evima IZA zadnjeg pronađenog.
-  // Idemo naprijed dok slike postoje; 3 uzastopna promašaja = kraj serije.
-  let tailAdded = [];
-  try {
-    if(orderedIds.length >= 3){
-      const maxId = Math.max(...orderedIds);
-      const cands = [];
-      for(let id = maxId + 1; id <= maxId + 20; id++) cands.push(id);
-      document.getElementById('loading').classList.add('show');
-      document.getElementById('loadingText').textContent = 'Tražim najnovije nijanse (iza zadnjeg ID-a)...';
-      const found = await probeIdsExist(cands);
-      let misses = 0;
-      for(const id of cands){
-        if(found.has(id)){ tailAdded.push(id); misses = 0; }
-        else if(++misses >= 3) break;
-      }
-    }
-  } catch(e){ console.warn('Tail probe failed:', e); }
-  // Oprez: odmah iza kraja serije može početi DRUGI proizvod — zato toast
-  // podsjeća da se zadnje kartice provjere i višak ukloni sa ✕.
-  if(tailAdded.length){
-    if(pairingOk){
-      let nextNum = 0;
-      for(const id of orderedIds){ const n = pairsAll.get(id); if(n != null && n > nextNum) nextNum = n; }
-      for(const id of tailAdded) pairsAll.set(id, ++nextNum);
-    }
-    for(const id of tailAdded) orderedIds.push(id);
-  }
+  // NAPOMENA: sondiranje IZA zadnjeg ID-a (rep serije) je isprobano i uklonjeno —
+  // ID-evi slika idu bez praznina kroz SVE proizvode, pa "sljedeći ID" gotovo
+  // uvijek pripada drugom proizvodu. Za nijanse koje stranica uopšte ne
+  // referencira postoji ručno dodavanje: "➕ Dodaj nijansu" (link slike ili ID).
 
   // Konačna provjera: svaki ID ima broj i svi su različiti — inače 1..N
   if(pairingOk){
@@ -919,8 +903,7 @@ async function applyParsedShades(htmlPages, sourceUrl){
   await probeAndShow();
   const pageTxt = pages.length > 1 ? ` sa ${pages.length} stranice` : '';
   const gapTxt = gapAdded.length ? ` · +${gapAdded.length} skrivenih iz ID praznina` : '';
-  const tailTxt = tailAdded.length ? ` · +${tailAdded.length} najnovijih sa kraja (provjeri zadnje kartice!)` : '';
-  toast(`Pronađeno ${orderedIds.length} nijansi${pageTxt}${gapTxt}${tailTxt} (${pairingOk ? 'brojevi sa stranice' : 'brojevi 1..' + orderedIds.length}) — provjeri slike i ukloni pogrešne sa ✕`, 6000);
+  toast(`Pronađeno ${orderedIds.length} nijansi${pageTxt}${gapTxt} (${pairingOk ? 'brojevi sa stranice' : 'brojevi 1..' + orderedIds.length}) — nedostaje nijansa? Dodaj je po linku slike (➕)`, 6000);
   return true;
 }
 
@@ -1088,6 +1071,56 @@ function clearAll(){
   currentShades.forEach(s => s.name = '');
   renderGrid();
   updateStats();
+}
+
+// ── NOVO v4.4: ručno dodavanje nijansi po linku slike ili ID-u ──
+// Za nijanse koje stranica uopšte ne referencira (JS ih učitava naknadno,
+// ID-evi su u dalekom batchu). Prihvata više linkova/ID-eva odjednom.
+async function addExtraShades(){
+  if(currentShades.length === 0 && !currentSerija){
+    toast('Prvo učitaj seriju (link ili Manuel)');
+    return;
+  }
+  const raw = document.getElementById('extraIds').value.trim();
+  if(!raw){ toast('Zalijepi link slike ili ID'); return; }
+  const ids = [];
+  const re = /(\d{2,7})/g;
+  let m;
+  while((m = re.exec(raw)) !== null){
+    const id = parseInt(m[1]);
+    if(!ids.includes(id) && !currentShades.some(s => s.imgId === id)) ids.push(id);
+  }
+  if(ids.length === 0){ toast('Nema novih ID-eva (možda su već u listi?)'); return; }
+
+  document.getElementById('loading').classList.add('show');
+  document.getElementById('loadingText').textContent = `Provjeravam ${ids.length} ID-eva...`;
+  const found = await probeIdsExist(ids);
+  document.getElementById('loading').classList.remove('show');
+
+  const existing = ids.filter(id => found.has(id));
+  if(existing.length === 0){
+    toast('Nijedna od tih slika ne postoji na serveru — provjeri link/ID', 4000);
+    return;
+  }
+  let nextNum = currentShades.reduce((mx, s) => Math.max(mx, s.colorNum), 0);
+  const saved = loadSaved();
+  const memoryNames = currentSerija ? (saved[currentSerija]?.names || {}) : {};
+  for(const id of existing){
+    currentShades.push({
+      imgId: id,
+      colorNum: ++nextNum,
+      serija: currentSerija,
+      name: memoryNames[String(id)] || '',
+      status: 'ok'
+    });
+  }
+  document.getElementById('extraIds').value = '';
+  renderGrid();
+  updateStats();
+  updateBulkPreview();
+  updateSwatchPreview();
+  const skipped = ids.length - existing.length;
+  toast(`✓ Dodano ${existing.length} nijansi (brojevi ${nextNum - existing.length + 1}..${nextNum})${skipped ? ` · ${skipped} ne postoji` : ''}`, 4000);
 }
 
 // ── NOVO v4: uklanjanje pogrešne nijanse iz prikaza (memorija ostaje) ──
