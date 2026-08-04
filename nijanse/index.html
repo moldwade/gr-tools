@@ -105,6 +105,10 @@
   .bulk-preview{border:1px solid #e0e0e0;border-radius:6px;padding:8px 10px;font-size:12px;max-height:180px;overflow-y:auto;background:#fafafa;line-height:1.7}
   .bulk-preview .over{color:#c8333a;font-weight:600}
   .prefix-preview{font-size:11px;color:#666;font-family:monospace;margin-top:3px;word-break:break-all}
+  .card .cn-input{width:52px;padding:2px 4px;border:1px solid transparent;border-radius:4px;font-size:13px;font-weight:700;color:#c8333a;font-family:inherit;background:transparent}
+  .card .cn-input:hover{border-color:#ddd;background:#fff}
+  .card .cn-input:focus{border-color:#c8333a;background:#fff;outline:none}
+  .card.flash{outline:3px solid #d97706;outline-offset:2px;transition:outline 0.2s}
 </style>
 </head>
 <body>
@@ -112,7 +116,7 @@
 <h1 style="display:flex;align-items:center;gap:14px">
   <img src="../gr-logo.png" alt="Golden Rose" style="height:40px;width:auto;filter:brightness(0)" />
   <span>Nijanse Tool</span>
-  <span class="badge">v4.4 ⚡</span>
+  <span class="badge">v4.5 ⚡</span>
 </h1>
 <div class="sub">Toplu thumbnail download · auto-rename · za Shopify · <span style="color:#1a8a4a;font-weight:600">⚡ Cloudflare Worker</span> · <span style="color:#1a8a4a;font-weight:600">🗜️ Auto-kompresija</span></div>
 
@@ -632,7 +636,8 @@ function gapCandidates(ids){
 }
 
 // Brza provjera postojanja slika (Image() kao u probeAndShow) — vraća Set postojećih
-async function probeIdsExist(ids){
+async function probeIdsExist(ids, timeoutMs){
+  timeoutMs = timeoutMs || 6000;
   const exists = new Set();
   const batchSize = 10;
   for(let b = 0; b < ids.length; b += batchSize){
@@ -643,7 +648,7 @@ async function probeIdsExist(ids){
       img.onload = () => fin(true);
       img.onerror = () => fin(false);
       img.src = BASE_URL + id + '.jpg';
-      setTimeout(() => fin(false), 6000);
+      setTimeout(() => fin(false), timeoutMs);
     })));
   }
   return exists;
@@ -1005,7 +1010,9 @@ function renderGrid(){
       </div>
       <div class="info">
         <div class="num-row">
-          <span class="colornum">${colorPad}</span>
+          <input type="number" class="cn-input" value="${sh.colorNum}" min="1" max="999"
+            title="Broj nijanse — klikni da izmijeniš"
+            onchange="updateColorNum(${idx}, this.value)" />
           <span class="imgid">${sh.imgId}</span>
         </div>
         <input type="text" 
@@ -1017,6 +1024,25 @@ function renderGrid(){
       </div>
     </div>`;
   }).join('');
+}
+
+// ── NOVO v4.5: izmjena broja nijanse direktno na kartici ──
+// Za slučajeve kad se brojevi sa sajta ne poklapaju (ukinute boje prave rupe
+// u numeraciji) — broj ide u ime fajla, pa mora odgovarati Shopify varijanti.
+function updateColorNum(idx, val){
+  if(!currentShades[idx]) return;
+  const n = parseInt(val);
+  if(isNaN(n) || n < 1 || n > 999){
+    toast('Broj mora biti između 1 i 999');
+    renderGrid();
+    return;
+  }
+  currentShades[idx].colorNum = n;
+  if(currentShades.filter(s => s.colorNum === n).length > 1){
+    toast(`⚠ Broj ${String(n).padStart(2, '0')} se sad ponavlja — provjeri!`, 3500);
+  }
+  updateBulkPreview();
+  updateSwatchPreview();
 }
 
 function updateName(idx, val){
@@ -1076,6 +1102,15 @@ function clearAll(){
 // ── NOVO v4.4: ručno dodavanje nijansi po linku slike ili ID-u ──
 // Za nijanse koje stranica uopšte ne referencira (JS ih učitava naknadno,
 // ID-evi su u dalekom batchu). Prihvata više linkova/ID-eva odjednom.
+// Skoči na karticu i kratko je označi (za "taj ID je već u listi")
+function flashCard(idx){
+  const card = document.querySelectorAll('#grid .card')[idx];
+  if(!card) return;
+  card.scrollIntoView({behavior: 'smooth', block: 'center'});
+  card.classList.add('flash');
+  setTimeout(() => card.classList.remove('flash'), 2500);
+}
+
 async function addExtraShades(){
   if(currentShades.length === 0 && !currentSerija){
     toast('Prvo učitaj seriju (link ili Manuel)');
@@ -1083,29 +1118,38 @@ async function addExtraShades(){
   }
   const raw = document.getElementById('extraIds').value.trim();
   if(!raw){ toast('Zalijepi link slike ili ID'); return; }
-  const ids = [];
+  const parsed = [];
   const re = /(\d{2,7})/g;
   let m;
   while((m = re.exec(raw)) !== null){
     const id = parseInt(m[1]);
-    if(!ids.includes(id) && !currentShades.some(s => s.imgId === id)) ids.push(id);
+    if(!parsed.includes(id)) parsed.push(id);
   }
-  if(ids.length === 0){ toast('Nema novih ID-eva (možda su već u listi?)'); return; }
+  if(parsed.length === 0){ toast('Nisam prepoznao nijedan ID u tome'); return; }
 
-  document.getElementById('loading').classList.add('show');
-  document.getElementById('loadingText').textContent = `Provjeravam ${ids.length} ID-eva...`;
-  const found = await probeIdsExist(ids);
-  document.getElementById('loading').classList.remove('show');
-
-  const existing = ids.filter(id => found.has(id));
-  if(existing.length === 0){
-    toast('Nijedna od tih slika ne postoji na serveru — provjeri link/ID', 4000);
+  // Već u listi? To NIJE greška — pokaži korisniku gdje je ta nijansa
+  const dupes = parsed.filter(id => currentShades.some(s => s.imgId === id));
+  const fresh = parsed.filter(id => !dupes.includes(id));
+  if(dupes.length){
+    const info = dupes.map(id => {
+      const s = currentShades.find(x => x.imgId === id);
+      return `${id} = broj ${String(s.colorNum).padStart(2, '0')}`;
+    }).join(' · ');
+    toast(`ℹ Već u listi: ${info}`, 5000);
+    flashCard(currentShades.findIndex(s => s.imgId === dupes[0]));
+  }
+  if(fresh.length === 0){
+    document.getElementById('extraIds').value = '';
     return;
   }
+
+  // Korisnik je URL vidio svojim očima — dodajemo ODMAH, bez čekanja provjere.
+  // Provjera ide u pozadini i samo označi karticu ako slike stvarno nema.
   let nextNum = currentShades.reduce((mx, s) => Math.max(mx, s.colorNum), 0);
+  const firstNum = nextNum + 1;
   const saved = loadSaved();
   const memoryNames = currentSerija ? (saved[currentSerija]?.names || {}) : {};
-  for(const id of existing){
+  for(const id of fresh){
     currentShades.push({
       imgId: id,
       colorNum: ++nextNum,
@@ -1119,8 +1163,21 @@ async function addExtraShades(){
   updateStats();
   updateBulkPreview();
   updateSwatchPreview();
-  const skipped = ids.length - existing.length;
-  toast(`✓ Dodano ${existing.length} nijansi (brojevi ${nextNum - existing.length + 1}..${nextNum})${skipped ? ` · ${skipped} ne postoji` : ''}`, 4000);
+  toast(`✓ Dodano ${fresh.length} nijansi (brojevi ${String(firstNum).padStart(2,'0')}..${String(nextNum).padStart(2,'0')}) — broj možeš izmijeniti na kartici`, 4500);
+
+  probeIdsExist(fresh, 10000).then(found => {
+    const missing = fresh.filter(id => !found.has(id));
+    if(missing.length === 0) return;
+    let changed = false;
+    currentShades.forEach(s => {
+      if(missing.includes(s.imgId) && s.status !== 'error'){ s.status = 'error'; changed = true; }
+    });
+    if(changed){
+      renderGrid();
+      updateStats();
+      toast(`⚠ Slika ne postoji za ID: ${missing.join(', ')} — ukloni sa ✕ ako je greška`, 5000);
+    }
+  });
 }
 
 // ── NOVO v4: uklanjanje pogrešne nijanse iz prikaza (memorija ostaje) ──
