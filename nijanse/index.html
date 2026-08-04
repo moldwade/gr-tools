@@ -112,7 +112,7 @@
 <h1 style="display:flex;align-items:center;gap:14px">
   <img src="../gr-logo.png" alt="Golden Rose" style="height:40px;width:auto;filter:brightness(0)" />
   <span>Nijanse Tool</span>
-  <span class="badge">v4.0 ⚡</span>
+  <span class="badge">v4.1 ⚡</span>
 </h1>
 <div class="sub">Toplu thumbnail download · auto-rename · za Shopify · <span style="color:#1a8a4a;font-weight:600">⚡ Cloudflare Worker</span> · <span style="color:#1a8a4a;font-weight:600">🗜️ Auto-kompresija</span></div>
 
@@ -183,6 +183,7 @@
     <br>2. Pritisni <code>Ctrl+U</code> (prikaz izvornog koda stranice)
     <br>3. <code>Ctrl+A</code> pa <code>Ctrl+C</code> (označi sve i kopiraj)
     <br>4. Zalijepi ovdje i klikni <b>"Analiziraj kod"</b>
+    <br><b>Više stranica boja?</b> (link se završava na <code>/1</code>, <code>/2</code>...) — zalijepi kod SVAKE stranice u isto polje, jedan ispod drugog
   </div>
   <textarea id="pageSource" rows="7" placeholder="&lt;html&gt;..."></textarea>
   <div class="row" style="margin-top:8px">
@@ -565,7 +566,13 @@ async function proxyFetchText(url, timeoutMs){
 // Da li tekst uopšte liči na stranicu proizvoda? Ako worker vrati grešku,
 // prazan odgovor ili nešto što nije ta stranica, vodimo korisnika na ručno lijepljenje.
 function looksLikeProductHtml(text){
-  return typeof text === 'string' && text.length > 500 && /img\/product\//i.test(text);
+  return typeof text === 'string' && text.length > 500 && /img\/product\//i.test(normalizeHtml(text));
+}
+
+// JSON u stranici često nosi URL-ove sa escaped kosim crtama (img\/product\/...)
+// ili / — bez ovoga regex ne vidi nijanse koje se učitavaju kroz JS.
+function normalizeHtml(text){
+  return String(text).replace(/\\u002[fF]/g, '/').replace(/\\\//g, '/').replace(/\\"/g, '"');
 }
 
 // Izvuci ID-eve slika iz sirovog HTML-a. Regex nad stringom (ne DOMParser) da
@@ -574,8 +581,10 @@ function looksLikeProductHtml(text){
 // Napomena: mogu se pokupiti i slike "povezanih proizvoda" — zato grid ima ✕
 // dugme za uklanjanje pogrešnih nijansi prije downloada.
 function extractShadeIds(html){
+  html = normalizeHtml(html);
   const seen = new Map();
-  const primary = /img\/product\/(?:zoom|middle|kind|thumb|small|large|original)\/(\d{2,7})\.(?:jpe?g|png|webp|gif)/gi;
+  // Bilo koji podfolder od img/product — folderi variraju po tipu proizvoda
+  const primary = /img\/product\/[a-z0-9_-]+\/(\d{2,7})\.(?:jpe?g|png|webp|gif)/gi;
   let m;
   while((m = primary.exec(html)) !== null){
     const id = parseInt(m[1]);
@@ -597,33 +606,40 @@ function extractShadeIds(html){
 // ako je svaki ID dobio broj i svi su različiti — djelimično uparivanje bi dalo
 // tiho pogrešnu mješavinu, a predvidljivo 1..N je bolje od toga.
 function pairColorNumbers(html, idEntries){
+  html = normalizeHtml(html); // pozicije iz extractShadeIds su u normalizovanom tekstu
   const result = new Map();
+  // Svaki obrazac nosi malu "kaznu" preciznosti — data-atribut je najpouzdaniji,
+  // goli broj između tagova najmanje. Ali o pobjedniku odlučuje BLIZINA mjestu
+  // gdje se slika pominje: prozor zahvata i susjedne nijanse, pa bi čvrsti
+  // prioritet obrazaca uzeo tuđi broj (npr. "no":"03" iz JSON-a susjeda) umjesto
+  // vlastitog alt="01" koji je odmah uz sliku.
   const patterns = [
-    /data-(?:color|no|num|number|renk)\s*=\s*["']?0*(\d{1,3})/gi,
-    /(?:\bno|\bnr|\brenk|\bcolor)[.:\s#-]{0,3}0*(\d{1,3})\b/gi,
-    /(?:alt|title)\s*=\s*["'][^"']*?\b0*(\d{1,3})\b[^"']*["']/gi,
-    />\s*0*(\d{1,3})\s*</g
+    { re: /data-(?:color|no|num|number|renk)\s*=\s*["']?0*(\d{1,3})/gi, penalty: 0 },
+    { re: /(?:\bno|\bnr|\brenk|\bcolor)[.:\s#"'-]{0,4}0*(\d{1,3})\b/gi, penalty: 15 },
+    { re: /(?:alt|title)\s*=\s*["'][^"']*?\b0*(\d{1,3})\b[^"']*["']/gi, penalty: 15 },
+    { re: />\s*0*(\d{1,3})\s*</g, penalty: 120 }
   ];
   for(const e of idEntries){
     const start = Math.max(0, e.pos - 300);
     const win = html.slice(start, e.pos + 500);
     const imgIdx = e.pos - start; // pozicija slike unutar prozora
-    let num = null;
-    for(const p of patterns){
-      // Prozor može zahvatiti i susjednu nijansu — zato ne uzimamo PRVI pogodak
-      // nego onaj NAJBLIŽI mjestu gdje se slika pominje.
-      p.lastIndex = 0;
-      let best = null, bestDist = Infinity, m;
-      while((m = p.exec(win)) !== null){
+    let best = null, bestScore = Infinity;
+    for(const {re, penalty} of patterns){
+      re.lastIndex = 0;
+      let m;
+      while((m = re.exec(win)) !== null){
         const n = parseInt(m[1]);
         if(n < 1 || n > 999) continue;
-        const dist = Math.abs(m.index - imgIdx);
-        if(dist < bestDist){ bestDist = dist; best = n; }
+        // Vlastita oznaka obično dolazi POSLIJE URL-a slike (alt, JSON ključ),
+        // a ono što je prije često pripada PRETHODNOJ nijansi — zato kandidati
+        // ispred slike nose dvostruku udaljenost.
+        const dist = m.index >= imgIdx ? (m.index - imgIdx) : (imgIdx - m.index) * 2;
+        const score = dist + penalty;
+        if(score < bestScore){ bestScore = score; best = n; }
       }
-      if(best !== null){ num = best; break; }
     }
-    if(num === null) return null;
-    result.set(e.imgId, num);
+    if(best === null) return null;
+    result.set(e.imgId, best);
   }
   const nums = [...result.values()];
   if(new Set(nums).size !== nums.length) return null;
@@ -652,6 +668,39 @@ function titleFromHtml(html){
     .trim();
 }
 
+// URL stranice n za proizvod — zadnji segment linka JE broj stranice
+// (.../product/234/slug/1 → .../product/234/slug/2)
+function pageUrl(url, n){
+  try {
+    const u = new URL(url);
+    if(/\/\d+\/?$/.test(u.pathname)) u.pathname = u.pathname.replace(/\/\d+\/?$/, '/' + n);
+    else u.pathname = u.pathname.replace(/\/+$/, '') + '/' + n;
+    return u.toString();
+  } catch(e){ return url; }
+}
+
+// Nijanse su podijeljene na više stranica (npr. 46 boja = 2 stranice)!
+// Čitamo stranicu po stranicu dok god donose NOVE ID-eve.
+async function fetchProductPages(url){
+  const pages = [];
+  const seenIds = new Set();
+  const MAX_PAGES = 15;
+  for(let n = 1; n <= MAX_PAGES; n++){
+    document.getElementById('loadingText').textContent = `Čitam stranicu proizvoda... (strana ${n})`;
+    let html = null;
+    try { html = await proxyFetchText(pageUrl(url, n)); }
+    catch(e){ console.warn('Proxy HTML fetch failed (strana ' + n + '):', e.message); }
+    if(!html || !looksLikeProductHtml(html)) break;
+    const fresh = extractShadeIds(html).filter(e => !seenIds.has(e.imgId));
+    // Stranica bez ijednog novog ID-a = kraj (ili sajt vraća istu stranicu za svaki broj)
+    if(n > 1 && fresh.length === 0) break;
+    fresh.forEach(e => seenIds.add(e.imgId));
+    pages.push(html);
+    if(n === 1 && fresh.length === 0) break;
+  }
+  return pages;
+}
+
 async function analyzeUrl(){
   const url = document.getElementById('productUrl').value.trim();
   if(!url){
@@ -665,9 +714,8 @@ async function analyzeUrl(){
   document.getElementById('loading').classList.add('show');
   document.getElementById('loadingText').textContent = 'Čitam stranicu proizvoda...';
   document.getElementById('progressBar').style.width = '0%';
-  let html = null;
-  try { html = await proxyFetchText(url); } catch(e){ console.warn('Proxy HTML fetch failed:', e.message); }
-  if(!html || !looksLikeProductHtml(html)){
+  const pages = await fetchProductPages(url);
+  if(pages.length === 0){
     document.getElementById('loading').classList.remove('show');
     const pp = document.getElementById('pastePanel');
     pp.style.display = 'block';
@@ -675,7 +723,7 @@ async function analyzeUrl(){
     toast('Automatsko čitanje nije uspjelo — kopiraj kod stranice (uputstvo ispod)', 4000);
     return;
   }
-  await applyParsedShades(html, url);
+  await applyParsedShades(pages, url);
 }
 
 function analyzePasted(){
@@ -689,25 +737,49 @@ function analyzePasted(){
   });
 }
 
-async function applyParsedShades(html, sourceUrl){
-  const ids = extractShadeIds(html);
-  if(ids.length === 0){
+// htmlPages: jedan HTML string (paste) ili niz stranica (URL analiza)
+async function applyParsedShades(htmlPages, sourceUrl){
+  const pages = Array.isArray(htmlPages) ? htmlPages : [htmlPages];
+
+  // Spoji ID-eve svih stranica — prvi-viđeni redoslijed, bez duplikata
+  const orderedIds = [];
+  const seen = new Set();
+  // Uparivanje brojeva radi po stranici (pozicije važe unutar te stranice),
+  // pa se mape spajaju — sve-ili-ništa pravilo važi za CIJELI skup.
+  let pairsAll = new Map();
+  let pairingOk = true;
+  for(const html of pages){
+    const entries = extractShadeIds(html);
+    for(const e of entries){
+      if(!seen.has(e.imgId)){ seen.add(e.imgId); orderedIds.push(e.imgId); }
+    }
+    if(pairingOk){
+      const p = pairColorNumbers(html, entries);
+      if(!p) pairingOk = false;
+      else for(const [id, num] of p){ if(!pairsAll.has(id)) pairsAll.set(id, num); }
+    }
+  }
+  if(pairingOk){
+    const nums = orderedIds.map(id => pairsAll.get(id));
+    if(nums.some(v => v == null) || new Set(nums).size !== nums.length) pairingOk = false;
+  }
+
+  if(orderedIds.length === 0){
     document.getElementById('loading').classList.remove('show');
     document.getElementById('pastePanel').style.display = 'block';
     toast('Nijedna slika proizvoda nije pronađena u kodu', 3500);
     return false;
   }
-  if(ids.length > 200){
-    if(!confirm(`${ids.length} slika je puno! Stvarno učitati?`)){
+  if(orderedIds.length > 200){
+    if(!confirm(`${orderedIds.length} slika je puno! Stvarno učitati?`)){
       document.getElementById('loading').classList.remove('show');
       return false;
     }
   }
-  const pairs = pairColorNumbers(html, ids);
 
   // Ime serije: ono što je korisnik upisao > naslov stranice > iz linka
   let serija = document.getElementById('serija').value.trim()
-    || titleFromHtml(html)
+    || titleFromHtml(pages[0])
     || (sourceUrl ? slugFromUrl(sourceUrl) : '');
   if(!serija){
     document.getElementById('loading').classList.remove('show');
@@ -721,11 +793,10 @@ async function applyParsedShades(html, sourceUrl){
   currentShades = [];
   const saved = loadSaved();
   const memoryNames = saved[serija]?.names || {};
-  ids.forEach((e, i) => {
-    const imgId = e.imgId;
+  orderedIds.forEach((imgId, i) => {
     currentShades.push({
       imgId,
-      colorNum: pairs ? pairs.get(imgId) : (i + 1),
+      colorNum: pairingOk ? pairsAll.get(imgId) : (i + 1),
       serija,
       name: memoryNames[String(imgId)] || '',
       status: 'pending'
@@ -733,7 +804,8 @@ async function applyParsedShades(html, sourceUrl){
   });
 
   await probeAndShow();
-  toast(`Pronađeno ${ids.length} nijansi (${pairs ? 'brojevi sa stranice' : 'brojevi 1..' + ids.length}) — provjeri slike i ukloni pogrešne sa ✕`, 5000);
+  const pageTxt = pages.length > 1 ? ` sa ${pages.length} stranice` : '';
+  toast(`Pronađeno ${orderedIds.length} nijansi${pageTxt} (${pairingOk ? 'brojevi sa stranice' : 'brojevi 1..' + orderedIds.length}) — provjeri slike i ukloni pogrešne sa ✕`, 5000);
   return true;
 }
 
