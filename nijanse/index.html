@@ -112,7 +112,7 @@
 <h1 style="display:flex;align-items:center;gap:14px">
   <img src="../gr-logo.png" alt="Golden Rose" style="height:40px;width:auto;filter:brightness(0)" />
   <span>Nijanse Tool</span>
-  <span class="badge">v4.2 ⚡</span>
+  <span class="badge">v4.3 ⚡</span>
 </h1>
 <div class="sub">Toplu thumbnail download · auto-rename · za Shopify · <span style="color:#1a8a4a;font-weight:600">⚡ Cloudflare Worker</span> · <span style="color:#1a8a4a;font-weight:600">🗜️ Auto-kompresija</span></div>
 
@@ -852,10 +852,42 @@ async function applyParsedShades(htmlPages, sourceUrl){
       for(let k = i; k < j; k++) pairsAll.set(orderedIds[k], prevNum + 1 + (k - i));
       i = j;
     }
-    if(pairingOk){
-      const nums = orderedIds.map(id => pairsAll.get(id));
-      if(nums.some(v => v == null) || new Set(nums).size !== nums.length) pairingOk = false;
+  }
+
+  // ── Sondiranje REPA serije: NAJNOVIJE nijanse (dodane kasnije) često uopšte
+  // nisu u HTML-u — postoje samo na serveru, na ID-evima IZA zadnjeg pronađenog.
+  // Idemo naprijed dok slike postoje; 3 uzastopna promašaja = kraj serije.
+  let tailAdded = [];
+  try {
+    if(orderedIds.length >= 3){
+      const maxId = Math.max(...orderedIds);
+      const cands = [];
+      for(let id = maxId + 1; id <= maxId + 20; id++) cands.push(id);
+      document.getElementById('loading').classList.add('show');
+      document.getElementById('loadingText').textContent = 'Tražim najnovije nijanse (iza zadnjeg ID-a)...';
+      const found = await probeIdsExist(cands);
+      let misses = 0;
+      for(const id of cands){
+        if(found.has(id)){ tailAdded.push(id); misses = 0; }
+        else if(++misses >= 3) break;
+      }
     }
+  } catch(e){ console.warn('Tail probe failed:', e); }
+  // Oprez: odmah iza kraja serije može početi DRUGI proizvod — zato toast
+  // podsjeća da se zadnje kartice provjere i višak ukloni sa ✕.
+  if(tailAdded.length){
+    if(pairingOk){
+      let nextNum = 0;
+      for(const id of orderedIds){ const n = pairsAll.get(id); if(n != null && n > nextNum) nextNum = n; }
+      for(const id of tailAdded) pairsAll.set(id, ++nextNum);
+    }
+    for(const id of tailAdded) orderedIds.push(id);
+  }
+
+  // Konačna provjera: svaki ID ima broj i svi su različiti — inače 1..N
+  if(pairingOk){
+    const nums = orderedIds.map(id => pairsAll.get(id));
+    if(nums.some(v => v == null) || new Set(nums).size !== nums.length) pairingOk = false;
   }
 
   // Ime serije: ono što je korisnik upisao > naslov stranice > iz linka
@@ -887,7 +919,8 @@ async function applyParsedShades(htmlPages, sourceUrl){
   await probeAndShow();
   const pageTxt = pages.length > 1 ? ` sa ${pages.length} stranice` : '';
   const gapTxt = gapAdded.length ? ` · +${gapAdded.length} skrivenih iz ID praznina` : '';
-  toast(`Pronađeno ${orderedIds.length} nijansi${pageTxt}${gapTxt} (${pairingOk ? 'brojevi sa stranice' : 'brojevi 1..' + orderedIds.length}) — provjeri slike i ukloni pogrešne sa ✕`, 6000);
+  const tailTxt = tailAdded.length ? ` · +${tailAdded.length} najnovijih sa kraja (provjeri zadnje kartice!)` : '';
+  toast(`Pronađeno ${orderedIds.length} nijansi${pageTxt}${gapTxt}${tailTxt} (${pairingOk ? 'brojevi sa stranice' : 'brojevi 1..' + orderedIds.length}) — provjeri slike i ukloni pogrešne sa ✕`, 6000);
   return true;
 }
 
