@@ -103,7 +103,7 @@
 <h1 style="display:flex;align-items:center;gap:14px">
   <img src="../gr-logo.png" alt="Golden Rose" style="height:40px;width:auto;filter:brightness(0)" />
   <span>Nijanse Tool</span>
-  <span class="badge">v3.1 ⚡</span>
+  <span class="badge">v3.2 ⚡</span>
 </h1>
 <div class="sub">Toplu thumbnail download · auto-rename · za Shopify · <span style="color:#1a8a4a;font-weight:600">⚡ Cloudflare Worker</span> · <span style="color:#1a8a4a;font-weight:600">🗜️ Auto-kompresija</span></div>
 
@@ -114,11 +114,11 @@
   <br>3. Klikni <b>"Učitaj"</b> — alat preuzima sve thumbnaile
   <br>4. Pod svaku sliku upiši ime nijanse (Moonlit, Cosmos, Aurora...)
   <br>5. <b>(opciono)</b> Uključi <b>"🗜️ Kompresija"</b> ako želiš manje fajlove
-  <br>6. Klikni <b>"💾 Preuzmi sve (ZIP)"</b> — fajlovi se snimaju kao <code>"Sparkle Glow 51 Moonlit.jpg"</code>
+  <br>6. Klikni <b>"💾 Preuzmi sve (ZIP)"</b> — fajlovi se snimaju kao <code>"Sparkle Glow 51 Moonlit.jpg"</code> (swatch: <code>.png</code>)
   <br><br><b>📦 ZIP sadrži 3 odvojene foldere:</b>
-  <br>🖼️ <b>Zoom_Velika</b> — velike slike za Shopify glavni proizvod
-  <br>📸 <b>Middle_Srednja</b> — srednje slike (thumbnail)
-  <br>🎨 <b>Swatch_Atributi</b> — male slike za color varijante (atributi)
+  <br>🖼️ <b>Zoom_Velika</b> — velike slike za Shopify glavni proizvod <span style="color:#888">(JPG)</span>
+  <br>📸 <b>Middle_Srednja</b> — srednje slike (thumbnail) <span style="color:#888">(JPG)</span>
+  <br>🎨 <b>Swatch_Atributi</b> — male slike za color varijante (atributi) — <b>PNG format</b> (automatski konvertovano)
   <br><br><b>🎁 Bonus:</b> Imena se automatski pamte za istu seriju (sledeći put se vraćaju)
 </div>
 
@@ -197,7 +197,7 @@
   </div>
   <div class="compress-info" id="compressInfo" style="display:none">
     <span>📏 Dimenzije: <b>nepromijenjene</b> (1000x1000)</span>
-    <span>📦 Format: <b>JPEG</b></span>
+    <span>📦 Format: <b>JPEG</b> <span style="color:#888">(samo Zoom/Middle — Swatch je PNG, bez kompresije)</span></span>
     <span>💾 Tipična ušteda: <b id="estSavings">~70%</b> manji fajl</span>
   </div>
 </div>
@@ -220,7 +220,7 @@
     <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px">
       <input type="checkbox" id="chkSwatch" checked />
       <span>🎨 Swatch (atributi)</span>
-      <span style="color:#888;font-size:10px">/kind/</span>
+      <span style="color:#888;font-size:10px">/kind/ · PNG</span>
     </label>
   </div>
 </div>
@@ -362,6 +362,47 @@ async function compressBlob(blob, quality){
     img.src = objectUrl;
     // Timeout safety
     setTimeout(()=>finish(blob), 10000);
+  });
+}
+
+// ── NOVO: Konverzija bloba u PNG (za Swatch fajlove) ──
+// Vraća null ako konverzija ne uspije — pozivalac tada task tretira kao grešku,
+// da JPEG bajtovi nikad ne završe u ZIP-u pod .png imenom.
+async function toPngBlob(blob){
+  // Već je PNG — nema potrebe za re-enkodiranjem
+  if(blob.type === 'image/png') return blob;
+  return new Promise((resolve)=>{
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(blob);
+    let resolved = false;
+    const finish = (val)=>{
+      if(resolved) return;
+      resolved = true;
+      URL.revokeObjectURL(objectUrl);
+      resolve(val);
+    };
+    img.onload = ()=>{
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        // Bez bijele pozadine — PNG ima alpha kanal, čuvamo ga
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob((pngBlob)=>{
+          // PNG je lossless pa je skoro uvijek veći od JPEG-a — to je očekivano,
+          // ne poredimo veličine (inače bismo vratili originalni JPEG).
+          finish(pngBlob && pngBlob.size > 100 ? pngBlob : null);
+        }, 'image/png');
+      } catch(e){
+        console.warn('PNG convert failed:', e);
+        finish(null);
+      }
+    };
+    img.onerror = ()=>finish(null);
+    img.src = objectUrl;
+    // Timeout safety
+    setTimeout(()=>finish(null), 10000);
   });
 }
 
@@ -625,15 +666,16 @@ async function downloadZip(){
   const tasks = [];
   for(const sh of okShades){
     const colorPad = String(sh.colorNum).padStart(2, '0');
-    const baseFilename = sh.name 
-      ? `${currentSerija} ${colorPad} ${sh.name}.jpg`
-      : `${currentSerija} ${colorPad}.jpg`;
-    
+    // Ime bez ekstenzije — Zoom/Middle dobijaju .jpg, Swatch .png
+    const baseName = sh.name
+      ? `${currentSerija} ${colorPad} ${sh.name}`
+      : `${currentSerija} ${colorPad}`;
+
     if(downloadZoom){
       tasks.push({
         url: 'https://www.goldenrose.com.tr/img/product/zoom/' + sh.imgId + '.jpg',
         folder: folderZoom,
-        filename: baseFilename,
+        filename: baseName + '.jpg',
         format: 'Zoom'
       });
     }
@@ -641,7 +683,7 @@ async function downloadZip(){
       tasks.push({
         url: 'https://www.goldenrose.com.tr/img/product/middle/' + sh.imgId + '.jpg',
         folder: folderMiddle,
-        filename: baseFilename,
+        filename: baseName + '.jpg',
         format: 'Middle'
       });
     }
@@ -652,7 +694,7 @@ async function downloadZip(){
           'https://www.goldenrose.com.tr/img/product/kind/' + sh.imgId + '.png',
         ],
         folder: folderSwatch,
-        filename: baseFilename,
+        filename: baseName + '.png',
         format: 'Swatch',
         isSwatch: true
       });
@@ -664,8 +706,9 @@ async function downloadZip(){
   const PROXY_URL = 'https://gr-proxy.tugay-goldenrose.workers.dev/?url=';
   
   // Canvas-based fallback (eğer proxy down olursa)
-  async function fetchViaCanvas(url, timeoutMs){
+  async function fetchViaCanvas(url, timeoutMs, mime){
     timeoutMs = timeoutMs || 8000;
+    mime = mime || 'image/jpeg';
     return new Promise((resolve)=>{
       const img = new Image();
       img.crossOrigin = 'anonymous';
@@ -681,7 +724,7 @@ async function downloadZip(){
           canvas.toBlob((blob)=>{
             if(blob && blob.size > 100) finish(blob);
             else finish(null);
-          }, 'image/jpeg', 0.95);
+          }, mime, mime === 'image/png' ? undefined : 0.95);
         } catch(e) { finish(null); }
       };
       img.onerror = ()=>finish(null);
@@ -690,9 +733,9 @@ async function downloadZip(){
     });
   }
   
-  async function fetchSingle(url, timeoutMs){
+  async function fetchSingle(url, timeoutMs, mime){
     timeoutMs = timeoutMs || 10000;
-    
+
     // PRIMARY: Cloudflare Worker proxy (najbrži i najpouzdaniji)
     try {
       const ctrl = new AbortController();
@@ -710,7 +753,7 @@ async function downloadZip(){
     }
     
     // FALLBACK: Canvas (ako worker ne radi)
-    return await fetchViaCanvas(url, 5000);
+    return await fetchViaCanvas(url, 5000, mime);
   }
   
   async function processTask(task){
@@ -718,19 +761,24 @@ async function downloadZip(){
     if(task.isSwatch){
       // Try multiple swatch URL patterns
       for(const u of task.urls){
-        blob = await fetchSingle(u, 4000);
+        blob = await fetchSingle(u, 4000, 'image/png');
         if(blob) break;
       }
+      // Swatch mora biti pravi PNG — izvor je JPEG, pa konvertujemo.
+      // Ako konverzija padne, blob postaje null i task se broji kao greška
+      // (radije nego da JPEG bajtovi završe u ZIP-u pod .png imenom).
+      if(blob) blob = await toPngBlob(blob);
     } else {
       blob = await fetchSingle(task.url, 6000);
     }
     if(blob){
-      const originalSize = blob.size;
-      totalOriginalBytes += originalSize;
-      
+      totalOriginalBytes += blob.size;
+
       // ── NOVO: Primijeni kompresiju ako je uključena ──
+      // Swatch se preskače: PNG je lossless, toBlob ignoriše quality,
+      // a bijela pozadina iz compressBlob bi uništila alpha kanal.
       let finalBlob = blob;
-      if(compressEnabled){
+      if(compressEnabled && !task.isSwatch){
         try {
           finalBlob = await compressBlob(blob, compressQuality);
         } catch(e){
@@ -738,7 +786,7 @@ async function downloadZip(){
           finalBlob = blob; // Fallback na original
         }
       }
-      
+
       totalFinalBytes += finalBlob.size;
       task.folder.file(task.filename, finalBlob);
     } else {
