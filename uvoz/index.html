@@ -195,9 +195,13 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
     </div>
 
     <div id="kontrolMsg" style="margin-top:16px"></div>
-    <div class="btns" style="margin-top:14px">
+    <div class="btns" style="margin-top:14px;align-items:center">
       <button id="bKalkKopya">kalkulaciju u clipboard</button>
+      <button id="bKalkDefterSec">Mevcut kalkulacije.csv'yi se&ccedil;</button>
+      <button class="primary" id="bKalkDefter">kalkulacije.csv indir</button>
+      <span id="kalkDefterBilgi" style="font-size:12.5px;color:#888"></span>
     </div>
+    <input type="file" id="kalkDefterFile" accept=".csv">
   </div>
 
   <div class="sec">
@@ -672,7 +676,8 @@ function dosyaYonlendir(f){
     var txt = String(e.target.result);
     if (txt.charCodeAt(0) === 0xFEFF) txt = txt.substring(1);
     var bas = txt.split(/\r?\n/).slice(0, 6).join('\n').toUpperCase();
-    if (bas.indexOf('FATURA_NO') >= 0) defterUygula(txt);
+    if (bas.indexOf('FATURA_NO') >= 0)
+      (bas.indexOf('KURS') >= 0 ? kalkDefterUygula : defterUygula)(txt);
     else if (/(^|\n)\s*(#|BARKOD\s*;|\d{6,}\s*;)/.test(bas)) listeUygula(f, txt);
     else {
       el('out').classList.remove('hide');
@@ -827,6 +832,7 @@ function kalkCiz(){
         '&mdash; onda se radi kontrola PDV osnovice.</div>';
   }
   el('kontrolMsg').innerHTML = m;
+  if (typeof kalkDefterBilgi === 'function') kalkDefterBilgi();
 }
 
 KALK.forEach(function(k){
@@ -861,6 +867,95 @@ el('bKalkKopya').onclick = function(){
     el('bKalkKopya').textContent = 'kopirano';
     setTimeout(function(){ el('bKalkKopya').textContent = 'kalkulaciju u clipboard'; }, 1600);
   });
+};
+
+/* ---- Kalkulacija defteri: her sevkiyat bir satir, kalici iz ---- */
+var KALK_KOLON = ['fatura_no','fatura_tarih','kaynak_dosya','valuta',
+  'roba','nije_roba','ukupno','exw','kurs',
+  'iznos_bez_pdv','pdv','ukupno_sa_pdv',
+  'carina','transport_eur','transport_km','sped_bez_pdv','sped_pdv','ostalo',
+  'zavisni_ukupno','kontrola_razlika'];
+var KALK_DEFTER = null;
+
+function kalkSatir(){
+  if (!S) return null;
+  var o = kalkOku(), mal = 0, nemal = 0, tum = 0, isk = 0, iskVar = false;
+  S.res.satirlar.forEach(function(x){
+    tum += x.tutar;
+    if (x.sinif === K.URUN) mal += x.tutar; else nemal += x.tutar;
+    if (x.iskonto != null){ isk += x.iskonto; iskVar = true; }
+  });
+  mal /= 10000; nemal /= 10000; tum /= 10000; isk /= 10000;
+  var exw   = iskVar ? (tum - isk) : o.ExwMan;
+  var traKM = o.Tra == null ? null : o.Tra * EUR_KM;
+  var iznos = (o.Kurs == null) ? null : mal * o.Kurs;
+  var zt = null;
+  [o.Carina, traKM, o.Spb, o.Spp, o.Ost].forEach(function(v){
+    if (v != null) zt = (zt || 0) + v; });
+  var razlika = null;
+  if (o.Pdv != null && o.Kurs != null && exw != null &&
+      o.Carina != null && traKM != null && o.Ost != null)
+    razlika = o.Pdv / PDV_STOPA - (exw * o.Kurs + traKM + o.Ost + o.Carina);
+
+  function n(v, d){ return v == null ? '' : bicim(v, d); }
+  return [S.res.fatura || '', S.res.tarih || '', S.dosya, 'USD/KM',
+          n(mal), n(nemal), n(tum), n(exw), n(o.Kurs, 6),
+          n(iznos), n(o.Pdv), (iznos == null || o.Pdv == null) ? '' : bicim(iznos + o.Pdv),
+          n(o.Carina), n(o.Tra), n(traKM), n(o.Spb), n(o.Spp), n(o.Ost),
+          n(zt), n(razlika)];
+}
+
+function kalkDefterBirlesik(){
+  var yeni = kalkSatir();
+  var eski = KALK_DEFTER ? KALK_DEFTER.satir : [];
+  if (!yeni) return {kolon: KALK_KOLON, satir: eski, ekle: 0};
+  var varmi = Object.create(null);
+  eski.forEach(function(r){ varmi[(r[0] || '') + '|' + (r[2] || '')] = 1; });
+  var anahtar = yeni[0] + '|' + yeni[2];
+  var ekle = varmi[anahtar] ? [] : [yeni];
+  return {kolon: KALK_KOLON, satir: eski.concat(ekle), ekle: ekle.length,
+          mukerrer: !!varmi[anahtar]};
+}
+
+function kalkDefterBilgi(){
+  var d = kalkDefterBirlesik();
+  var t = KALK_DEFTER ? (KALK_DEFTER.satir.length + ' kayıt yüklü') : 'defter yüklenmedi';
+  if (!S) t += ' · fatura yok';
+  else if (d.mukerrer) t += ' · bu fatura zaten var';
+  else t += ' · bu fatura eklenecek';
+  el('kalkDefterBilgi').textContent = t;
+}
+
+el('bKalkDefterSec').onclick = function(){ el('kalkDefterFile').click(); };
+el('kalkDefterFile').onchange = function(){
+  var f = el('kalkDefterFile').files[0]; if (!f) return;
+  var rd = new FileReader();
+  rd.onload = function(e){
+    var txt = String(e.target.result);
+    if (txt.charCodeAt(0) === 0xFEFF) txt = txt.substring(1);
+    kalkDefterUygula(txt);
+  };
+  rd.readAsText(f, 'utf-8');
+};
+
+function kalkDefterUygula(txt){
+  var rows = txt.split(/\r?\n/).filter(function(l){ return l.trim(); })
+                .map(function(l){ return l.split(';'); });
+  if (rows.length && normBaslik(rows[0][0]) === 'FATURA NO') rows.shift();
+  KALK_DEFTER = {satir: rows};
+  el('out').classList.remove('hide');
+  kalkDefterBilgi();
+}
+
+el('bKalkDefter').onclick = function(){
+  var d = kalkDefterBirlesik();
+  if (!d.satir.length){
+    el('kalkDefterBilgi').textContent = 'kaydedilecek bir şey yok';
+    return;
+  }
+  indir('kalkulacije.csv', csvMetin([d.kolon].concat(d.satir)), true);
+  el('kalkDefterBilgi').textContent = d.satir.length + ' kayıt indirildi (' +
+    d.ekle + ' yeni) — defter/kalkulacije.csv üzerine kaydet';
 };
 
 el('bListeSec').onclick = function(){ el('listeFile').click(); };
