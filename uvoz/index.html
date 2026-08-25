@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="bs">
+<head>
+<meta charset="UTF-8">
+<title>Uvoz Robe — Fabrika XLS → Robno CSV · Golden Rose</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  background:#000;color:#fff;min-height:100vh;line-height:1.5;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse 80% 50% at 50% 0%,rgba(200,51,58,.10),transparent 60%),
+             radial-gradient(ellipse 60% 40% at 80% 100%,rgba(255,215,0,.04),transparent 60%)}
+.wrap{max-width:1100px;margin:0 auto;padding:40px 22px 80px;position:relative;z-index:1}
+h1{font-size:13px;font-weight:700;letter-spacing:5px;text-transform:uppercase;color:#bbb}
+.sub{color:#888;font-size:13px;margin-top:8px}
+header{text-align:center;margin-bottom:34px}
+.divider{width:60px;height:1px;margin:18px auto;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.4),transparent)}
+.pill{display:inline-block;font-size:11px;padding:4px 11px;border-radius:20px;
+  border:1px solid rgba(255,255,255,.16);color:#aaa;margin:3px}
+.pill.warn{border-color:rgba(255,190,0,.5);color:#ffbe00;background:rgba(255,190,0,.07)}
+
+.drop{border:1.5px dashed rgba(255,255,255,.2);border-radius:16px;padding:44px 24px;text-align:center;
+  background:rgba(255,255,255,.03);transition:.25s;cursor:pointer}
+.drop:hover,.drop.over{border-color:rgba(200,51,58,.65);background:rgba(200,51,58,.07)}
+.drop b{display:block;font-size:16px;margin-bottom:6px}
+.drop span{color:#888;font-size:13px}
+input[type=file]{display:none}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:26px}
+.stat{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:13px;padding:16px}
+.stat .k{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#888}
+.stat .v{font-size:26px;font-weight:600;margin-top:4px}
+.stat .m{font-size:12px;color:#777;margin-top:2px}
+.stat.ok .v{color:#4ade80}.stat.red .v{color:#f87171}.stat.gold .v{color:#ffd700}
+
+.sec{margin-top:34px}
+.sec-t{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#888;font-weight:700;
+  margin-bottom:14px;display:flex;align-items:center;gap:12px}
+.sec-t::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(255,255,255,.15),transparent)}
+
+.btns{display:flex;flex-wrap:wrap;gap:10px}
+button{font:inherit;font-size:13px;padding:11px 17px;border-radius:11px;cursor:pointer;
+  border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);color:#fff;transition:.2s}
+button:hover:not(:disabled){background:rgba(255,255,255,.11);border-color:rgba(255,255,255,.3)}
+button:disabled{opacity:.32;cursor:not-allowed}
+button.primary{background:linear-gradient(135deg,#c8333a,#96262c);border-color:transparent;font-weight:600}
+button.primary:hover:not(:disabled){filter:brightness(1.15);background:linear-gradient(135deg,#c8333a,#96262c)}
+
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.07)}
+th{color:#888;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;font-weight:700}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+.scroll{max-height:340px;overflow:auto;border:1px solid rgba(255,255,255,.1);border-radius:12px}
+.tag{font-size:10px;padding:2px 7px;border-radius:5px;background:rgba(255,255,255,.1);color:#ccc}
+.tag.tester{background:rgba(255,215,0,.15);color:#ffd700}
+.tag.stalak,.tag.modul{background:rgba(74,222,128,.16);color:#6ee7a0}
+.tag.promo,.tag.ambalaj,.tag.sarf,.tag.yarimamul{background:rgba(120,160,255,.15);color:#9ab6ff}
+.tag.diger{background:rgba(248,113,113,.18);color:#fca5a5}
+.msg{padding:11px 14px;border-radius:10px;font-size:13px;margin-bottom:10px}
+.msg.err{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.4);color:#fca5a5}
+.msg.warn{background:rgba(255,190,0,.1);border:1px solid rgba(255,190,0,.35);color:#ffce4d}
+.msg.ok{background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.35);color:#86efac}
+.hide{display:none}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#ffd700}
+.foot{margin-top:44px;font-size:11.5px;color:#666;line-height:1.9;border-top:1px solid rgba(255,255,255,.08);padding-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Uvoz Robe</h1>
+  <div class="divider"></div>
+  <div class="sub">Fabrika sevkiyat Excel'i → Tehnokom Robno uvoz CSV'si</div>
+  <div style="margin-top:12px">
+    <span class="pill" id="havuzPill"></span>
+    <span class="pill" id="yasPill"></span>
+  </div>
+</header>
+
+<div id="cdnErr" class="msg err hide">
+  <b>xlsx kütüphanesi yüklenmedi.</b> <code>vendor/xlsx.full.min.js</code> dosyası
+  bu HTML'in yanındaki <code>vendor/</code> klasöründe durmalı.
+</div>
+
+<div class="drop" id="drop">
+  <b>Fabrika dosyasını buraya sürükle</b>
+  <span>.xlsx veya .xls — ya da tıklayıp seç</span>
+</div>
+<input type="file" id="file" accept=".xlsx,.xls,.xlsm">
+
+<div id="out" class="hide">
+
+  <div id="msgs"></div>
+
+  <div class="grid">
+    <div class="stat"><div class="k">Toplam satır</div><div class="v" id="sTop"></div><div class="m" id="sTopG"></div></div>
+    <div class="stat ok"><div class="k">Uvoz CSV</div><div class="v" id="sUvoz"></div><div class="m" id="sUvozG"></div></div>
+    <div class="stat gold"><div class="k">Yeni artikl</div><div class="v" id="sYeni"></div><div class="m" id="sYeniG"></div></div>
+    <div class="stat"><div class="k">Atılan</div><div class="v" id="sAtil"></div><div class="m" id="sAtilG"></div></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-t">İndir</div>
+    <div class="btns">
+      <button class="primary" id="bUvoz">uvoz.csv &nbsp;<small>3 kolon</small></button>
+      <button id="bUvoz5">uvoz5.csv &nbsp;<small>eski format</small></button>
+      <button id="bYeni">yeni_artikli.csv</button>
+      <button id="bAtil">atilanlar.csv</button>
+      <button id="bKopya">uvoz'u panoya kopyala</button>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-t">Barkod listesi</div>
+    <div class="btns" style="align-items:center">
+      <button id="bListeSec">barkodi.csv yükle</button>
+      <button id="bListeSil">gömülü listeye dön</button>
+      <span id="listeBilgi" style="font-size:12.5px;color:#888"></span>
+    </div>
+    <input type="file" id="listeFile" accept=".csv">
+  </div>
+
+  <div class="sec">
+    <div class="sec-t">Tester / stalak defteri</div>
+    <div class="btns" style="align-items:center">
+      <button id="bDefterSec">Mevcut testeri.csv'yi seç (birleştir)</button>
+      <button id="bDefter">testeri.csv indir</button>
+      <span id="defterBilgi" style="font-size:12.5px;color:#888"></span>
+    </div>
+    <input type="file" id="defterFile" accept=".csv">
+  </div>
+
+  <div class="sec" id="yeniSec">
+    <div class="sec-t">Robno'da elle açılacaklar</div>
+    <div class="scroll"><table id="tYeni"></table></div>
+  </div>
+
+  <div class="sec" id="atilSec">
+    <div class="sec-t">Atılan satırlar</div>
+    <div id="atilDagilim" style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:7px"></div>
+    <div class="scroll"><table id="tAtil"></table></div>
+  </div>
+
+  <div class="sec hide" id="uyariSec">
+    <div class="sec-t">Uyarılar</div>
+    <div class="scroll"><table id="tUyari"></table></div>
+  </div>
+
+</div>
+
+<div class="foot">
+  <b>Kural A</b> — STOCK CODE öneki <code>TP TR TM</code> tester, <code>1SA</code> sarf,
+  <code>1KU</code> ambalaj, <code>3PR</code> promo → her zaman atılır, barkod robno'da olsa bile.<br>
+  <b>Kural B</b> — kalanın barkodu <code>artikl.tps</code>'te varsa uvoz.csv'ye, yoksa yeni artikl listesine.<br>
+  <b>Tutar</b> — <code>INVOICE GROSS AMOUNT</code> (indirimsiz) × 10000, tam sayı, ondalık yok.<br>
+  Barkod havuzunu tazelemek için: <code>../analiza-pj/.venv/bin/python uvoz.py --arac</code>
+</div>
+
+</div>
+
+<script type="text/plain" id="havuzData"></script>
+<script src="vendor/xlsx.full.min.js"></script>
+<script>
+/* ---- uvoz.py --arac ile uretildi; kurallar uvoz.py'de degisir ---- */
+var K = {
+ "SINIF_ONEK": {
+  "1SA": "sarf",
+  "1KU": "ambalaj",
+  "3PR": "promo",
+  "1HA": "yarimamul",
+  "5HA": "yarimamul"
+ },
+ "ISIM_TESTER": [
+  "TESTER",
+  "TSTR",
+  "SACHET",
+  "SAMPLE"
+ ],
+ "ISIM_STALAK": [
+  "WALL UNIT",
+  "STALAK",
+  "STAND",
+  "STANT"
+ ],
+ "URUN": "urun",
+ "BASLIK": {
+  "barkod": [
+   "BARCODE",
+   "BARKOD"
+  ],
+  "kod": [
+   "STOCK CODE",
+   "STOK KODU"
+  ],
+  "isim": [
+   "STOCK NAME",
+   "STOK ADI"
+  ],
+  "adet": [
+   "QTY",
+   "QUANTITY",
+   "MIKTAR"
+  ],
+  "tutar": [
+   "INVOICE GROSS AMOUNT",
+   "GROSS AMOUNT"
+  ],
+  "bfiyat": [
+   "GROSS UNIT PRICE",
+   "UNIT PRICE"
+  ],
+  "fatura": [
+   "INVOICE NO",
+   "INVOICE NUMBER"
+  ],
+  "tarih": [
+   "INVOICE DATE"
+  ],
+  "grup": [
+   "GROUP NAME"
+  ]
+ },
+ "ZORUNLU": [
+  "barkod",
+  "kod",
+  "isim",
+  "adet",
+  "tutar"
+ ],
+ "DEFTER_KOLON": [
+  "fatura_no",
+  "fatura_tarih",
+  "barkod",
+  "stock_code",
+  "sinif",
+  "isim",
+  "adet",
+  "tutar",
+  "birim_fiyat",
+  "kaynak_dosya"
+ ]
+};
+var HAVUZ_SAYI = 0, HAVUZ_TARIH = "2026-08-25",
+    HAVUZ_YIL = "2026", HAVUZ_KAYNAK = "";
+var BOM = String.fromCharCode(0xFEFF);
+
+/* Barkod havuzu iki kaynaktan gelebilir:
+   1) sayfaya gomulu liste (uvoz.py --tazele uretir)
+   2) barkodi.csv surukle-birak -> localStorage'da kalir, gomulu olani ezer
+   Ikincisi Python olmayan makinede tazeleme icin ve havuzu icermeyen
+   (public site) surumu icin var. */
+var LS_ANAHTAR = 'uvoz.barkodi';
+var HAVUZ = Object.create(null), HAVUZ_META = null;
+
+function havuzKur(metin, meta){
+  var m = Object.create(null), n = 0;
+  var lines = metin.split('\n');
+  for (var i=0;i<lines.length;i++){
+    var l = lines[i]; if (!l) continue;
+    var j = l.indexOf(':'); if (j < 0) continue;
+    m[l.substring(0,j)] = l.substring(j+1); n++;
+  }
+  HAVUZ = m; HAVUZ_META = meta; HAVUZ_META.sayi = n;
+  havuzYaz();
+}
+
+function havuzYaz(){
+  var p = document.getElementById('havuzPill');
+  var y = document.getElementById('yasPill');
+  var m = HAVUZ_META;
+  if (!m.sayi){
+    p.className = 'pill warn';
+    p.textContent = 'barkod listesi yok — barkodi.csv sürükle';
+    y.textContent = ''; y.className = 'pill hide';
+    return;
+  }
+  p.className = 'pill';
+  p.textContent = m.sayi.toLocaleString('bs') + ' barkod · ' + m.kaynak;
+  var yas = Math.round((Date.now() - Date.parse(m.tarih))/86400000);
+  y.className = 'pill';
+  y.textContent = (m.yuklenen ? 'yüklenen liste ' : 'liste ') + m.tarih +
+                  (yas > 0 ? ' (' + yas + ' gün önce)' : ' (bugün)');
+  if (yas > 45){ y.className = 'pill warn'; y.textContent += ' — tazele'; }
+}
+
+/* once gomulu, sonra varsa localStorage'daki daha yeni liste */
+havuzKur(document.getElementById('havuzData').textContent,
+         {kaynak: HAVUZ_KAYNAK || 'gömülü', tarih: HAVUZ_TARIH, yuklenen: false});
+(function(){
+  try {
+    var raw = localStorage.getItem(LS_ANAHTAR);
+    if (!raw) return;
+    var o = JSON.parse(raw);
+    if (o && o.metin && (!HAVUZ_META.sayi || o.tarih >= HAVUZ_META.tarih))
+      havuzKur(o.metin, {kaynak: o.kaynak || 'barkodi.csv', tarih: o.tarih, yuklenen: true});
+  } catch (e) { /* private mode / kapali depolama - gomulu liste kullanilir */ }
+})();
+if (typeof XLSX === 'undefined') document.getElementById('cdnErr').classList.remove('hide');
+
+/* ---------------- uvoz.py ile birebir ayni mantik ---------------- */
+function normBaslik(s){ return String(s==null?'':s).toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim(); }
+function onek(sc){ return String(sc==null?'':sc).trim().split(/[.\-]/)[0].toUpperCase(); }
+
+/* '... STANT 100CM (3 MODUL)' stalagin kendisidir - parantez ici atilir */
+function stalakSinifi(ad){
+  return /\bMOD/.test(ad.replace(/\([^)]*\)/g,' ')) ? 'modul' : 'stalak';
+}
+
+function sinifla(sc, isim, grup){
+  var kod = String(sc==null?'':sc).trim();
+  var ad = (String(isim==null?'':isim) + ' ' + String(grup==null?'':grup)).toUpperCase();
+  var isimTester = K.ISIM_TESTER.some(function(k){ return ad.indexOf(k) >= 0; });
+  var isimStalak = K.ISIM_STALAK.some(function(k){ return ad.indexOf(k) >= 0; });
+
+  /* 1) Stalak/modul - ayracsiz kod ya da adinda stalak gecen her sey */
+  if (isimStalak || (kod.indexOf('.') < 0 && kod.indexOf('-') < 0)){
+    if (!isimStalak)
+      return ['diger', 'ayraçsız kod "' + kod + '" ama adında stalak/modül yok — ürün değil sayıldı'];
+    return [stalakSinifi(ad), null];
+  }
+
+  /* 2) Noktali kod = uretim/tester/ambalaj kodu, asla urun degil */
+  if (kod.indexOf('.') >= 0){
+    var p = onek(kod);
+    if (isimTester || p.charAt(0) === 'T') return ['tester', null];
+    var s = K.SINIF_ONEK[p];
+    if (s) return [s, null];
+    return ['diger', 'noktalı kod, bilinmeyen önek "' + p + '" — ürün değil sayıldı, atilanlar.csv\'ye bak'];
+  }
+
+  /* 3) Tireli kod = urun adayi; barkod eslesmesi karar verir */
+  if (isimTester)
+    return [K.URUN, 'adında TESTER geçiyor ama kod tireli (ürün kodu) — ürün sayıldı, kontrol et'];
+  return [K.URUN, null];
+}
+
+function barkodStr(v){
+  if (v == null) return ['', true];
+  if (typeof v === 'number') return [String(Math.round(v)), true];
+  var s = String(v).trim().replace(/\s/g,'');
+  if (/^\d+\.0+$/.test(s)) s = s.split('.')[0];
+  return [s.replace(/\D/g,''), /^\d*$/.test(s)];
+}
+
+/* Decimal(str(v)) * 10000 -> tam sayi.  Float carpmasi kullanilamaz:
+   JS'te 23.28*10000 === 232799.99999999997 */
+function shift4(v){
+  if (v == null || v === '') return [0, true];
+  var s = String(v);
+  if (/[eE]/.test(s)) { var r = Math.round(Number(v)*10000); return [r, Math.abs(Number(v)*10000-r) < 1e-6]; }
+  var neg = s.charAt(0) === '-'; if (neg) s = s.substring(1);
+  if (!/^\d*(\.\d*)?$/.test(s)) return [0, false];
+  var pr = s.split('.'), ip = pr[0] || '0', fp = pr[1] || '';
+  var extra = fp.substring(4);
+  fp = (fp + '0000').substring(0,4);
+  var n = parseInt(ip + fp, 10) || 0;
+  var yukari = extra !== '' && parseInt(extra.charAt(0),10) >= 5;
+  if (yukari) n += 1;
+  /* xlsx float'lari 1e-8 mertebesinde gosterim gurultusu tasir
+     (3165.120000000001) - bunu gercek 5. ondalikla karistirma. */
+  var kesir = extra === '' ? 0 : parseFloat('0.' + extra);
+  var sapma = yukari ? 1 - kesir : kesir;
+  return [neg ? -n : n, sapma <= 0.001];
+}
+/* 232800 -> "23,28"  (uvoz.py'deki virgul() ile ayni) */
+function virgul(n){
+  var neg = n < 0; n = Math.abs(n);
+  var ip = Math.floor(n/10000), fp = String(n%10000 + 10000).substring(1).replace(/0+$/,'');
+  return (neg?'-':'') + ip + (fp ? ',' + fp : '');
+}
+
+function okuFatura(wb){
+  var ws = wb.Sheets[wb.SheetNames[0]];
+  var rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null, blankrows:false});
+  if (!rows.length) throw new Error('sayfa bos');
+
+  var hi = -1;
+  for (var i=0; i<Math.min(15, rows.length); i++)
+    if (rows[i].some(function(c){ return K.BASLIK.barkod.indexOf(normBaslik(c)) >= 0; })) { hi = i; break; }
+  if (hi < 0) throw new Error('BARCODE basligi bulunamadi');
+
+  var ix = {};
+  rows[hi].forEach(function(c, j){
+    var n = normBaslik(c);
+    for (var alan in K.BASLIK)
+      if (K.BASLIK[alan].indexOf(n) >= 0 && !(alan in ix)) ix[alan] = j;
+  });
+  var eksik = K.ZORUNLU.filter(function(a){ return !(a in ix); });
+  if (eksik.length) throw new Error('zorunlu kolon yok: ' + eksik.map(function(a){ return K.BASLIK[a][0]; }).join(', '));
+
+  function g(r, alan){ var j = ix[alan]; return (j == null || j >= r.length) ? null : r[j]; }
+
+  var out = [], tarih = null;
+  for (var r=hi+1; r<rows.length; r++){
+    var row = rows[r];
+    var bb = barkodStr(g(row,'barkod'));
+    if (!bb[0]) continue;
+    if (tarih === null){
+      var t = g(row,'tarih');
+      if (t instanceof Date) tarih = t.getFullYear()+'-'+('0'+(t.getMonth()+1)).slice(-2)+'-'+('0'+t.getDate()).slice(-2);
+      else if (typeof t === 'number' && t > 20000){
+        var d = XLSX.SSF.parse_date_code(t);
+        if (d) tarih = d.y+'-'+('0'+d.m).slice(-2)+'-'+('0'+d.d).slice(-2);
+      }
+    }
+    out.push({
+      barkod: bb[0], barkodTemiz: bb[1],
+      kod: String(g(row,'kod') == null ? '' : g(row,'kod')).trim(),
+      isim: String(g(row,'isim') == null ? '' : g(row,'isim')).replace(/\s+/g,' ').trim(),
+      adet: Number(g(row,'adet')) || 0,
+      t10000: shift4(g(row,'tutar')),
+      bf: ('bfiyat' in ix) ? shift4(g(row,'bfiyat')) : null,
+      grup: String(g(row,'grup') == null ? '' : g(row,'grup')).trim(),
+      fatura: String(g(row,'fatura') == null ? '' : g(row,'fatura')).trim()
+    });
+  }
+  var fatura = '';
+  for (var k=0;k<out.length;k++) if (out[k].fatura) { fatura = out[k].fatura; break; }
+  if (!fatura) fatura = String(wb.SheetNames[0] || '').trim();
+  return {satirlar: out, fatura: fatura, tarih: tarih};
+}
+
+function isle(satirlar){
+  var uyarilar = [];
+  satirlar.forEach(function(s, i){
+    var c = sinifla(s.kod, s.isim, s.grup);
+    s.sinif = c[0];
+    if (c[1]) uyarilar.push([i+1, s.kod, c[1]]);
+    if (!s.barkodTemiz) uyarilar.push([i+1, s.kod, 'barkodda rakam disi karakter vardi']);
+    if (!s.t10000[1]) uyarilar.push([i+1, s.kod, 'tutar 4 ondaliktan fazla hassasiyet tasiyor - yuvarlandi']);
+    s.tutar = s.t10000[0];
+    if (s.adet !== Math.round(s.adet)) uyarilar.push([i+1, s.kod, 'adet tam sayi degil (' + s.adet + ')']);
+    if (s.adet <= 0) uyarilar.push([i+1, s.kod, 'adet <= 0 (' + s.adet + ')']);
+    s.bfiyat = (s.bf && s.bf[0]) ? s.bf[0] : (s.adet ? Math.round(s.tutar / s.adet) : 0);
+
+    if (s.sinif !== K.URUN) s.hedef = 'atilan';
+    else if (HAVUZ[s.barkod] !== undefined) { s.hedef = 'uvoz'; s.sifra = HAVUZ[s.barkod]; }
+    else s.hedef = 'yeni';
+  });
+  return uyarilar;
+}
+
+/* ---------------- CSV ---------------- */
+function csvMetin(rows, crlf){
+  var nl = crlf === false ? '\n' : '\r\n';
+  return rows.map(function(r){
+    return r.map(function(c){
+      c = c == null ? '' : String(c);
+      return /[;"\r\n]/.test(c) ? '"' + c.replace(/"/g,'""') + '"' : c;
+    }).join(';');
+  }).join(nl) + (rows.length ? nl : '');
+}
+function indir(ad, metin, bom){
+  var blob = new Blob([(bom ? BOM : '') + metin], {type:'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = ad;
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 800);
+}
+
+/* ---------------- durum ---------------- */
+var S = null;          // son islenen fatura
+var DEFTER = null;     // yuklenen mevcut defter
+
+function el(id){ return document.getElementById(id); }
+function esc(x){ return String(x==null?'':x).replace(/[<>&]/g, function(c){
+  return c==='<'?'&lt;':c==='>'?'&gt;':'&amp;'; }); }
+function tabloYaz(t, bas, satirlar){
+  var h = '<thead><tr>' + bas.map(function(b){ return '<th>' + b + '</th>'; }).join('') + '</tr></thead><tbody>';
+  h += satirlar.map(function(r){
+    return '<tr>' + r.map(function(c){
+      if (c && typeof c === 'object' && c.html) return '<td>' + c.html + '</td>';
+      return '<td class="' + (typeof c === 'number' ? 'num' : '') + '">' + esc(c) + '</td>';
+    }).join('') + '</tr>';
+  }).join('') + '</tbody>';
+  t.innerHTML = h;
+}
+
+function goster(res, dosyaAdi){
+  var sat = res.satirlar;
+  var uyarilar = isle(sat);   /* havuz degismis olabilir - her cizimde tazele */
+  var uvoz = sat.filter(function(s){ return s.hedef === 'uvoz'; });
+  var yeni = sat.filter(function(s){ return s.hedef === 'yeni'; });
+  var atil = sat.filter(function(s){ return s.hedef === 'atilan'; });
+  function top(a){ return a.reduce(function(x,s){ return x + s.tutar; }, 0); }
+  var tHep = top(sat), tU = top(uvoz), tY = top(yeni), tA = top(atil);
+
+  S = {res:res, uvoz:uvoz, yeni:yeni, atil:atil, dosya:dosyaAdi, uyarilar:uyarilar};
+
+  el('sTop').textContent = sat.length;     el('sTopG').textContent  = virgul(tHep);
+  el('sUvoz').textContent = uvoz.length;   el('sUvozG').textContent = virgul(tU);
+  el('sYeni').textContent = yeni.length;   el('sYeniG').textContent = virgul(tY);
+  el('sAtil').textContent = atil.length;   el('sAtilG').textContent = virgul(tA);
+
+  var m = [];
+  m.push('<div class="msg ok"><b>' + esc(res.fatura || '-') + '</b>' +
+         (res.tarih ? ' · ' + res.tarih : '') + ' · ' + esc(dosyaAdi) + '</div>');
+  var fark = tHep - (tU + tY + tA);
+  if (fark !== 0) m.push('<div class="msg err">Denklik hatasi: ' + virgul(fark) + ' kayip!</div>');
+  if (yeni.length) m.push('<div class="msg warn"><b>' + yeni.length +
+    ' ürünün barkodu robno\'da yok.</b> Bunlar uvoz.csv\'ye girmedi - önce robno\'da elle aç, sonra <code>uvoz.py --arac</code> ile listeyi tazele.</div>');
+  el('msgs').innerHTML = m.join('');
+
+  tabloYaz(el('tYeni'), ['Barkod','Stock code','Isim','Adet','Tutar'],
+    yeni.map(function(s){ return [s.barkod, s.kod, s.isim, s.adet, virgul(s.tutar)]; }));
+  el('yeniSec').className = yeni.length ? 'sec' : 'sec hide';
+
+  var dagilim = {};
+  atil.forEach(function(s){
+    if (!dagilim[s.sinif]) dagilim[s.sinif] = [0,0];
+    dagilim[s.sinif][0]++; dagilim[s.sinif][1] += s.tutar;
+  });
+  el('atilDagilim').innerHTML = Object.keys(dagilim).sort(function(a,b){
+      return dagilim[b][0] - dagilim[a][0]; }).map(function(k){
+      return '<span class="tag ' + k + '">' + k + ' ' + dagilim[k][0] +
+             ' &middot; ' + virgul(dagilim[k][1]) + '</span>'; }).join(' ');
+
+  tabloYaz(el('tAtil'), ['Sinif','Barkod','Stock code','Isim','Adet','Tutar'],
+    atil.map(function(s){ return [{html:'<span class="tag ' + s.sinif + '">' + s.sinif + '</span>'},
+                                  s.barkod, s.kod, s.isim, s.adet, virgul(s.tutar)]; }));
+  el('atilSec').className = atil.length ? 'sec' : 'sec hide';
+
+  tabloYaz(el('tUyari'), ['Satir','Stock code','Uyari'], uyarilar);
+  el('uyariSec').className = uyarilar.length ? 'sec' : 'sec hide';
+
+  defterBilgiYaz();
+  el('out').classList.remove('hide');
+}
+
+/* ---------------- defter ---------------- */
+function defterSatirlari(){
+  if (!S) return [];
+  var topla = Object.create(null), sira = [];
+  S.atil.forEach(function(s){
+    if (topla[s.barkod]) { topla[s.barkod].adet += s.adet; topla[s.barkod].tutar += s.tutar; }
+    else { topla[s.barkod] = {barkod:s.barkod, kod:s.kod, sinif:s.sinif, isim:s.isim,
+                              adet:s.adet, tutar:s.tutar, bfiyat:s.bfiyat}; sira.push(s.barkod); }
+  });
+  var f = S.res.fatura, t = S.res.tarih || '';
+  return sira.map(function(b){ var s = topla[b];
+    return [f, t, s.barkod, s.kod, s.sinif, s.isim, s.adet, virgul(s.tutar), virgul(s.bfiyat), S.dosya];
+  }).sort(function(a,b){ return (a[4]+a[3]).localeCompare(b[4]+b[3]); });
+}
+function defterBirlesik(){
+  var yeni = defterSatirlari();
+  var eski = DEFTER ? DEFTER.satir : [];
+  var varmi = Object.create(null);
+  eski.forEach(function(r){ varmi[r[0] + '' + r[2]] = 1; });
+  var ekle = yeni.filter(function(r){ return !varmi[r[0] + '' + r[2]]; });
+  return {kolon: K.DEFTER_KOLON, satir: eski.concat(ekle), ekle: ekle.length, toplam: yeni.length};
+}
+function defterBilgiYaz(){
+  if (!S) return;
+  var d = defterBirlesik();
+  el('defterBilgi').textContent = DEFTER
+    ? (DEFTER.satir.length + ' mevcut kayit yüklü · bu faturadan ' + d.ekle + '/' + d.toplam + ' yeni')
+    : (d.toplam + ' tester/promo satiri hazir - mevcut testeri.csv varsa önce onu seç');
+}
+
+/* ---------------- olaylar ---------------- */
+var drop = el('drop'), fileIn = el('file');
+drop.onclick = function(){ fileIn.click(); };
+['dragenter','dragover'].forEach(function(e){ drop.addEventListener(e, function(ev){ ev.preventDefault(); drop.classList.add('over'); }); });
+['dragleave','drop'].forEach(function(e){ drop.addEventListener(e, function(ev){ ev.preventDefault(); drop.classList.remove('over'); }); });
+drop.addEventListener('drop', function(ev){ if (ev.dataTransfer.files[0]) yukle(ev.dataTransfer.files[0]); });
+fileIn.onchange = function(){ if (fileIn.files[0]) yukle(fileIn.files[0]); };
+
+function yukle(f){
+  var rd = new FileReader();
+  rd.onload = function(e){
+    try {
+      var wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
+      var res = okuFatura(wb);
+      goster(res, f.name);
+    } catch (err) {
+      el('out').classList.remove('hide');
+      el('msgs').innerHTML = '<div class="msg err"><b>Okunamadi:</b> ' + esc(err.message) + '</div>';
+      console.error(err);
+    }
+  };
+  rd.readAsArrayBuffer(f);
+}
+
+function stem(){ return (S.res.fatura || 'uvoz').replace(/[^\w.-]+/g,'_'); }
+el('bUvoz').onclick  = function(){ indir(stem()+'_uvoz.csv',
+  csvMetin(S.uvoz.map(function(s){ return [s.barkod, s.adet, s.tutar]; }))); };
+el('bUvoz5').onclick = function(){ indir(stem()+'_uvoz5.csv',
+  csvMetin(S.uvoz.map(function(s){ return [s.barkod, s.adet, s.tutar, virgul(s.tutar), virgul(s.bfiyat)]; }))); };
+el('bYeni').onclick  = function(){ indir(stem()+'_yeni_artikli.csv',
+  csvMetin([['barkod','stock_code','isim','grup','adet','tutar','birim_fiyat']].concat(
+    S.yeni.map(function(s){ return [s.barkod, s.kod, s.isim, s.grup, s.adet, virgul(s.tutar), virgul(s.bfiyat)]; }))), true); };
+el('bAtil').onclick  = function(){ indir(stem()+'_atilanlar.csv',
+  csvMetin([['sinif','barkod','stock_code','isim','grup','adet','tutar','birim_fiyat']].concat(
+    S.atil.map(function(s){ return [s.sinif, s.barkod, s.kod, s.isim, s.grup, s.adet, virgul(s.tutar), virgul(s.bfiyat)]; }))), true); };
+el('bKopya').onclick = function(){
+  var t = S.uvoz.map(function(s){ return [s.barkod, s.adet, s.tutar].join('\t'); }).join('\n');
+  navigator.clipboard.writeText(t).then(function(){
+    el('bKopya').textContent = 'kopyalandi';
+    setTimeout(function(){ el('bKopya').textContent = "uvoz'u panoya kopyala"; }, 1600);
+  });
+};
+
+el('bListeSec').onclick = function(){ el('listeFile').click(); };
+el('listeFile').onchange = function(){
+  var f = el('listeFile').files[0]; if (!f) return;
+  var rd = new FileReader();
+  rd.onload = function(e){
+    var txt = String(e.target.result);
+    if (txt.charCodeAt(0) === 0xFEFF) txt = txt.substring(1);
+    var tarih = '', kaynak = 'barkodi.csv', satir = [];
+    txt.split(/\r?\n/).forEach(function(l){
+      l = l.trim(); if (!l) return;
+      if (l.charAt(0) === '#'){            /* # barkodi.csv | tarih | kaynak | n */
+        var pr = l.substring(1).split('|').map(function(x){ return x.trim(); });
+        if (pr[1] && /^\d{4}-\d{2}-\d{2}$/.test(pr[1])) tarih = pr[1];
+        if (pr[2]) kaynak = pr[2];
+        return;
+      }
+      var pr2 = l.split(';');
+      if (pr2.length >= 2 && /^\d+$/.test(pr2[0])) satir.push(pr2[0] + ':' + pr2[1]);
+    });
+    if (!satir.length){
+      el('listeBilgi').textContent = 'okunamadı — barkod;sifra kolonları bulunamadı';
+      return;
+    }
+    var metin = satir.join('\n');
+    if (!tarih) tarih = new Date(f.lastModified).toISOString().substring(0,10);
+    havuzKur(metin, {kaynak: kaynak, tarih: tarih, yuklenen: true});
+    try { localStorage.setItem(LS_ANAHTAR,
+            JSON.stringify({metin: metin, tarih: tarih, kaynak: kaynak})); }
+    catch (err){ el('listeBilgi').textContent =
+      satir.length + ' barkod yüklendi (kaydedilemedi — sayfayı yenileyince gider)'; return; }
+    el('listeBilgi').textContent = satir.length + ' barkod yüklendi ve kaydedildi';
+    if (S) goster(S.res, S.dosya);   /* acik fatura varsa yeniden siniflandir */
+  };
+  rd.readAsText(f, 'utf-8');
+};
+el('bListeSil').onclick = function(){
+  try { localStorage.removeItem(LS_ANAHTAR); } catch (e) {}
+  havuzKur(el('havuzData').textContent,
+           {kaynak: HAVUZ_KAYNAK || 'gömülü', tarih: HAVUZ_TARIH, yuklenen: false});
+  el('listeBilgi').textContent = 'gömülü listeye dönüldü';
+  if (S) goster(S.res, S.dosya);
+};
+
+el('bDefterSec').onclick = function(){ el('defterFile').click(); };
+el('defterFile').onchange = function(){
+  var f = el('defterFile').files[0]; if (!f) return;
+  var rd = new FileReader();
+  rd.onload = function(e){
+    var txt = String(e.target.result);
+    if (txt.charCodeAt(0) === 0xFEFF) txt = txt.substring(1);
+    var rows = txt.split(/\r?\n/).filter(function(l){ return l.trim(); })
+                  .map(function(l){ return l.split(';'); });
+    if (rows.length && normBaslik(rows[0][0]) === 'FATURA NO') rows.shift();
+    DEFTER = {satir: rows};
+    defterBilgiYaz();
+  };
+  rd.readAsText(f, 'utf-8');
+};
+el('bDefter').onclick = function(){
+  var d = defterBirlesik();
+  indir('testeri.csv', csvMetin([d.kolon].concat(d.satir)), true);
+  el('defterBilgi').textContent = d.satir.length + ' kayit indirildi (' + d.ekle +
+    ' yeni) - defter/testeri.csv üzerine kaydet';
+};
+</script>
+</body>
+</html>
