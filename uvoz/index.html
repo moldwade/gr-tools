@@ -108,10 +108,11 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
 </div>
 
 <div class="drop" id="drop">
-  <b>Fabrika dosyasını buraya sürükle</b>
-  <span>.xlsx veya .xls — ya da tıklayıp seç</span>
+  <b>Dosyayı buraya sürükle</b>
+  <span>fabrika Excel'i (.xlsx / .xls) &middot; barkodi.csv &middot; testeri.csv<br>
+  hangisi olduğunu kendi anlar — ya da tıklayıp seç</span>
 </div>
-<input type="file" id="file" accept=".xlsx,.xls,.xlsm">
+<input type="file" id="file" accept=".xlsx,.xls,.xlsm,.csv">
 
 <div id="out" class="hide">
 
@@ -657,8 +658,30 @@ var drop = el('drop'), fileIn = el('file');
 drop.onclick = function(){ fileIn.click(); };
 ['dragenter','dragover'].forEach(function(e){ drop.addEventListener(e, function(ev){ ev.preventDefault(); drop.classList.add('over'); }); });
 ['dragleave','drop'].forEach(function(e){ drop.addEventListener(e, function(ev){ ev.preventDefault(); drop.classList.remove('over'); }); });
-drop.addEventListener('drop', function(ev){ if (ev.dataTransfer.files[0]) yukle(ev.dataTransfer.files[0]); });
-fileIn.onchange = function(){ if (fileIn.files[0]) yukle(fileIn.files[0]); };
+drop.addEventListener('drop', function(ev){ if (ev.dataTransfer.files[0]) dosyaYonlendir(ev.dataTransfer.files[0]); });
+fileIn.onchange = function(){ if (fileIn.files[0]) dosyaYonlendir(fileIn.files[0]); };
+
+/* Tek surukleme alani var; birakilan dosyanin ne oldugunu icerigine bakip
+   kendisi anlar.  Onceden barkodi.csv buraya birakilinca fatura sanilip
+   "zorunlu kolon yok" hatasi veriyordu - basligi 'barkod' ve bu BARCODE ile
+   eslesiyor. */
+function dosyaYonlendir(f){
+  if (/\.(xlsx|xlsm|xls)$/i.test(f.name || '')) { yukle(f); return; }
+  var rd = new FileReader();
+  rd.onload = function(e){
+    var txt = String(e.target.result);
+    if (txt.charCodeAt(0) === 0xFEFF) txt = txt.substring(1);
+    var bas = txt.split(/\r?\n/).slice(0, 6).join('\n').toUpperCase();
+    if (bas.indexOf('FATURA_NO') >= 0) defterUygula(txt);
+    else if (/(^|\n)\s*(#|BARKOD\s*;|\d{6,}\s*;)/.test(bas)) listeUygula(f, txt);
+    else {
+      el('out').classList.remove('hide');
+      el('msgs').innerHTML = '<div class="msg err"><b>Tanınmadı:</b> ' + esc(f.name) +
+        ' &mdash; fabrika Excel\'i (.xlsx/.xls), barkodi.csv ya da testeri.csv bekleniyor.</div>';
+    }
+  };
+  rd.readAsText(f, 'utf-8');
+}
 
 function yukle(f){
   var rd = new FileReader();
@@ -741,30 +764,35 @@ function kalkOku(){
 }
 
 function kalkCiz(){
-  if (!S){ el('kalkSec').className = 'sec hide'; return; }
+  /* Bolum ASLA gizlenmez - kullanici icine rakam yaziyor olabilir.
+     Fatura yuklu degilse sadece faturadan gelen satirlar bos kalir. */
   el('kalkSec').className = 'sec';
 
-  var mal = 0, nemal = 0, tum = 0, iskonto = 0, iskVar = false;
-  S.res.satirlar.forEach(function(s){
-    tum += s.tutar;
-    if (s.sinif === K.URUN) mal += s.tutar; else nemal += s.tutar;
-    if (s.iskonto != null){ iskonto += s.iskonto; iskVar = true; }
-  });
-  mal /= 10000; nemal /= 10000; tum /= 10000; iskonto /= 10000;
+  var mal = null, nemal = null, tum = null, iskonto = 0, iskVar = false;
+  if (S){
+    mal = 0; nemal = 0; tum = 0;
+    S.res.satirlar.forEach(function(s){
+      tum += s.tutar;
+      if (s.sinif === K.URUN) mal += s.tutar; else nemal += s.tutar;
+      if (s.iskonto != null){ iskonto += s.iskonto; iskVar = true; }
+    });
+    mal /= 10000; nemal /= 10000; tum /= 10000; iskonto /= 10000;
+  }
 
-  el('kMal').textContent   = bicim(mal) + ' USD';
-  el('kNemal').textContent = bicim(nemal) + ' USD';
-  el('kTum').textContent   = bicim(tum) + ' USD';
+  el('kMal').textContent   = mal   == null ? '\u2014' : bicim(mal) + ' USD';
+  el('kNemal').textContent = nemal == null ? '\u2014' : bicim(nemal) + ' USD';
+  el('kTum').textContent   = tum   == null ? '\u2014' : bicim(tum) + ' USD';
 
   var o = kalkOku();
   var exw = iskVar ? (tum - iskonto) : o.ExwMan;
   el('exwManRow').style.display  = iskVar ? 'none' : 'flex';
   el('exwManHint').style.display = iskVar ? 'none' : 'block';
+  if (!S) el('exwManHint').textContent = 'fatura yüklenmedi — EXW TOTAL\'i sen gir';
   el('kExw').textContent = exw == null ? '\u2014' : bicim(exw) + ' USD';
 
   var kurs = o.Kurs, traKM = o.Tra == null ? null : o.Tra * EUR_KM;
 
-  var iznos = (kurs == null) ? null : mal * kurs;
+  var iznos = (kurs == null || mal == null) ? null : mal * kurs;
   el('rIznos').textContent = iznos == null ? '\u2014' : bicim(iznos) + ' KM';
   el('rPdv').textContent   = o.Pdv == null ? '\u2014' : bicim(o.Pdv) + ' KM';
   el('rTot').textContent   = (iznos == null || o.Pdv == null) ? '\u2014' : bicim(iznos + o.Pdv) + ' KM';
@@ -807,12 +835,15 @@ KALK.forEach(function(k){
 });
 
 el('bKalkKopya').onclick = function(){
-  var o = kalkOku(), mal = 0;
-  S.res.satirlar.forEach(function(s){ if (s.sinif === K.URUN) mal += s.tutar; });
-  mal /= 10000;
-  var kurs = o.Kurs, iznos = kurs == null ? null : mal * kurs;
+  var o = kalkOku(), mal = null;
+  if (S){
+    mal = 0;
+    S.res.satirlar.forEach(function(s){ if (s.sinif === K.URUN) mal += s.tutar; });
+    mal /= 10000;
+  }
+  var kurs = o.Kurs, iznos = (kurs == null || mal == null) ? null : mal * kurs;
   var L = [];
-  L.push('KALKULACIJA  ' + (S.res.fatura || '') + '  ' + (S.res.tarih || ''));
+  L.push('KALKULACIJA  ' + (S ? (S.res.fatura || '') + '  ' + (S.res.tarih || '') : ''));
   L.push('');
   L.push('ROBNO');
   L.push('  Iznos fakture bez PDV-a\t' + bicim(iznos));
@@ -839,6 +870,13 @@ el('listeFile').onchange = function(){
   rd.onload = function(e){
     var txt = String(e.target.result);
     if (txt.charCodeAt(0) === 0xFEFF) txt = txt.substring(1);
+    listeUygula(f, txt);
+  };
+  rd.readAsText(f, 'utf-8');
+};
+
+function listeUygula(f, txt){
+  {
     var tarih = '', kaynak = 'barkodi.csv', satir = [];
     txt.split(/\r?\n/).forEach(function(l){
       l = l.trim(); if (!l) return;
@@ -863,10 +901,10 @@ el('listeFile').onchange = function(){
     catch (err){ el('listeBilgi').textContent =
       satir.length + ' barkod yüklendi (kaydedilemedi — sayfayı yenileyince gider)'; return; }
     el('listeBilgi').textContent = satir.length + ' barkod yüklendi ve kaydedildi';
+    el('out').classList.remove('hide');
     if (S) goster(S.res, S.dosya);   /* acik fatura varsa yeniden siniflandir */
-  };
-  rd.readAsText(f, 'utf-8');
-};
+  }
+}
 el('bListeSil').onclick = function(){
   try { localStorage.removeItem(LS_ANAHTAR); } catch (e) {}
   havuzKur(el('havuzData').textContent,
@@ -882,14 +920,19 @@ el('defterFile').onchange = function(){
   rd.onload = function(e){
     var txt = String(e.target.result);
     if (txt.charCodeAt(0) === 0xFEFF) txt = txt.substring(1);
-    var rows = txt.split(/\r?\n/).filter(function(l){ return l.trim(); })
-                  .map(function(l){ return l.split(';'); });
-    if (rows.length && normBaslik(rows[0][0]) === 'FATURA NO') rows.shift();
-    DEFTER = {satir: rows};
-    defterBilgiYaz();
+    defterUygula(txt);
   };
   rd.readAsText(f, 'utf-8');
 };
+
+function defterUygula(txt){
+  var rows = txt.split(/\r?\n/).filter(function(l){ return l.trim(); })
+                .map(function(l){ return l.split(';'); });
+  if (rows.length && normBaslik(rows[0][0]) === 'FATURA NO') rows.shift();
+  DEFTER = {satir: rows};
+  el('out').classList.remove('hide');
+  defterBilgiYaz();
+}
 el('bDefter').onclick = function(){
   var d = defterBirlesik();
   indir('testeri.csv', csvMetin([d.kolon].concat(d.satir)), true);
