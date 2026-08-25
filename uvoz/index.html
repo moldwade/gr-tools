@@ -641,8 +641,8 @@ function defterBirlesik(){
   var yeni = defterSatirlari();
   var eski = DEFTER ? DEFTER.satir : [];
   var varmi = Object.create(null);
-  eski.forEach(function(r){ varmi[r[0] + '' + r[2]] = 1; });
-  var ekle = yeni.filter(function(r){ return !varmi[r[0] + '' + r[2]]; });
+  eski.forEach(function(r){ varmi[r[0] + '|' + r[2]] = 1; });
+  var ekle = yeni.filter(function(r){ return !varmi[r[0] + '|' + r[2]]; });
   return {kolon: K.DEFTER_KOLON, satir: eski.concat(ekle), ekle: ekle.length, toplam: yeni.length};
 }
 function defterBilgiYaz(){
