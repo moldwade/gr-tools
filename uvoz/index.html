@@ -64,6 +64,28 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
 .msg.ok{background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.35);color:#86efac}
 .hide{display:none}
 code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#ffd700}
+
+/* Kalkulacija */
+.kalk{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:18px}
+.kbox{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.1);
+  border-radius:14px;padding:18px}
+.kbox h4{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#888;
+  font-weight:700;margin-bottom:12px}
+.krow{display:flex;justify-content:space-between;align-items:center;gap:10px;
+  padding:5px 0;font-size:13px;border-bottom:1px solid rgba(255,255,255,.05)}
+.krow:last-child{border-bottom:none}
+.krow .lbl{color:#aaa}
+.krow .val{font-variant-numeric:tabular-nums;white-space:nowrap}
+.krow.tot{border-top:1px solid rgba(255,255,255,.18);margin-top:6px;padding-top:9px;font-weight:700}
+.krow.tot .val{font-size:15px;color:#ffd700}
+.kin{width:118px;text-align:right;font:inherit;font-size:13px;
+  font-variant-numeric:tabular-nums;padding:5px 8px;border-radius:8px;
+  border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.35);color:#fff}
+.kin:focus{outline:none;border-color:rgba(200,51,58,.7);background:rgba(0,0,0,.55)}
+.kin.bos{border-color:rgba(255,190,0,.45)}
+.khint{font-size:10.5px;color:#666;margin-top:-2px;padding-bottom:6px}
+.kecho{font-size:11px;color:#7a7a7a;min-width:96px;text-align:right;
+  font-variant-numeric:tabular-nums}
 .foot{margin-top:44px;font-size:11.5px;color:#666;line-height:1.9;border-top:1px solid rgba(255,255,255,.08);padding-top:18px}
 </style>
 </head>
@@ -110,6 +132,70 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
       <button id="bYeni">yeni_artikli.csv</button>
       <button id="bAtil">atilanlar.csv</button>
       <button id="bKopya">uvoz'u panoya kopyala</button>
+    </div>
+  </div>
+
+  <div class="sec" id="kalkSec">
+    <div class="sec-t">Kalkulacija &mdash; Robno + zavisni troskovi</div>
+    <div class="kalk">
+
+      <div class="kbox">
+        <h4>Iz fakture (racuna alat)</h4>
+        <div class="krow"><span class="lbl">Roba (bez testera/stalaka)</span><span class="val" id="kMal">&mdash;</span></div>
+        <div class="krow"><span class="lbl">Testeri / stalci / ambalaza</span><span class="val" id="kNemal">&mdash;</span></div>
+        <div class="krow"><span class="lbl">Ukupno (SUB TOTAL)</span><span class="val" id="kTum">&mdash;</span></div>
+        <div class="krow"><span class="lbl">EXW (nakon popusta)</span><span class="val" id="kExw">&mdash;</span></div>
+      </div>
+
+      <div class="kbox">
+        <h4>Upisi sa papira</h4>
+        <div class="krow"><span class="lbl">Kurs</span>
+          <span class="kecho" id="eKurs"></span><input class="kin" id="iKurs" inputmode="decimal" placeholder="1,676809"></div>
+        <div class="khint">carinska deklaracija, polje 23</div>
+        <div class="krow"><span class="lbl">Carina</span>
+          <span class="kecho" id="eCarina"></span><input class="kin" id="iCarina" inputmode="decimal" placeholder="0,00"></div>
+        <div class="khint">ASYCUDA, tax 001</div>
+        <div class="krow"><span class="lbl">PDV</span>
+          <span class="kecho" id="ePdv"></span><input class="kin" id="iPdv" inputmode="decimal" placeholder="0,00"></div>
+        <div class="khint">ASYCUDA, tax 090</div>
+        <div class="krow"><span class="lbl">Transport (EUR)</span>
+          <span class="kecho" id="eTra"></span><input class="kin" id="iTra" inputmode="decimal" placeholder="0,00"></div>
+        <div class="khint">prevoznik &middot; x 1,95583 u KM</div>
+        <div class="krow"><span class="lbl">Spedicija bez PDV</span>
+          <span class="kecho" id="eSpb"></span><input class="kin" id="iSpb" inputmode="decimal" placeholder="0,00"></div>
+        <div class="krow"><span class="lbl">Spedicija PDV</span>
+          <span class="kecho" id="eSpp"></span><input class="kin" id="iSpp" inputmode="decimal" placeholder="0,00"></div>
+        <div class="krow"><span class="lbl">Ostalo</span>
+          <span class="kecho" id="eOst"></span><input class="kin" id="iOst" inputmode="decimal" placeholder="0,00"></div>
+        <div class="khint">Prilog 9 (PZT), ukupno KM</div>
+        <div class="krow" id="exwManRow" style="display:none"><span class="lbl">EXW (USD)</span>
+          <span class="kecho" id="eExwMan"></span><input class="kin" id="iExwMan" inputmode="decimal" placeholder="0,00"></div>
+        <div class="khint" id="exwManHint" style="display:none">datoteka nema DISCOUNT kolonu &mdash; upisi EXW TOTAL sa fakture</div>
+      </div>
+
+      <div class="kbox">
+        <h4>Robno &mdash; kalkulacija</h4>
+        <div class="krow"><span class="lbl">Iznos fakture bez PDV-a</span><span class="val" id="rIznos">&mdash;</span></div>
+        <div class="krow"><span class="lbl">PDV</span><span class="val" id="rPdv">&mdash;</span></div>
+        <div class="krow tot"><span class="lbl">Ukupno</span><span class="val" id="rTot">&mdash;</span></div>
+        <div class="krow"><span class="lbl">Kurs</span><span class="val" id="rKurs">&mdash;</span></div>
+      </div>
+
+      <div class="kbox">
+        <h4>Zavisni troskovi (KM)</h4>
+        <div class="krow"><span class="lbl">Carina</span><span class="val" id="zCarina">&mdash;</span></div>
+        <div class="krow"><span class="lbl">Transport</span><span class="val" id="zTra">&mdash;</span></div>
+        <div class="krow"><span class="lbl">Spedicija bez PDV</span><span class="val" id="zSpb">&mdash;</span></div>
+        <div class="krow"><span class="lbl">Spedicija PDV</span><span class="val" id="zSpp">&mdash;</span></div>
+        <div class="krow"><span class="lbl">Ostalo</span><span class="val" id="zOst">&mdash;</span></div>
+        <div class="krow tot"><span class="lbl">Ukupno</span><span class="val" id="zTot">&mdash;</span></div>
+      </div>
+
+    </div>
+
+    <div id="kontrolMsg" style="margin-top:16px"></div>
+    <div class="btns" style="margin-top:14px">
+      <button id="bKalkKopya">kalkulaciju u clipboard</button>
     </div>
   </div>
 
@@ -221,6 +307,9 @@ var K = {
   ],
   "grup": [
    "GROUP NAME"
+  ],
+  "iskonto": [
+   "DISCOUNT"
   ]
  },
  "ZORUNLU": [
@@ -414,6 +503,7 @@ function okuFatura(wb){
       t10000: shift4(g(row,'tutar')),
       bf: ('bfiyat' in ix) ? shift4(g(row,'bfiyat')) : null,
       grup: String(g(row,'grup') == null ? '' : g(row,'grup')).trim(),
+      isk: ('iskonto' in ix) ? shift4(g(row,'iskonto')) : null,
       fatura: String(g(row,'fatura') == null ? '' : g(row,'fatura')).trim()
     });
   }
@@ -435,6 +525,7 @@ function isle(satirlar){
     if (s.adet !== Math.round(s.adet)) uyarilar.push([i+1, s.kod, 'adet tam sayi degil (' + s.adet + ')']);
     if (s.adet <= 0) uyarilar.push([i+1, s.kod, 'adet <= 0 (' + s.adet + ')']);
     s.bfiyat = (s.bf && s.bf[0]) ? s.bf[0] : (s.adet ? Math.round(s.tutar / s.adet) : 0);
+    s.iskonto = s.isk ? s.isk[0] : null;
 
     if (s.sinif !== K.URUN) s.hedef = 'atilan';
     else if (HAVUZ[s.barkod] !== undefined) { s.hedef = 'uvoz'; s.sifra = HAVUZ[s.barkod]; }
@@ -527,6 +618,7 @@ function goster(res, dosyaAdi){
   el('uyariSec').className = uyarilar.length ? 'sec' : 'sec hide';
 
   defterBilgiYaz();
+  kalkCiz();
   el('out').classList.remove('hide');
 }
 
@@ -600,6 +692,143 @@ el('bKopya').onclick = function(){
   navigator.clipboard.writeText(t).then(function(){
     el('bKopya').textContent = 'kopyalandi';
     setTimeout(function(){ el('bKopya').textContent = "uvoz'u panoya kopyala"; }, 1600);
+  });
+};
+
+/* ---------------- Kalkulacija ----------------
+   Belgeler taranmis goruntu (font referansi 0) - PDF'ten otomatik cekilemez,
+   OCR ise 6 ondalikli kursu yanlis okuyabilir.  Bu yuzden 6 sayi elle
+   girilir; alat aritmetigi yapar ve PDV osnovicasi uzerinden capraz
+   kontrol eder - yanlis girilen kurs/carina/PDV aninda gorunur. */
+var EUR_KM = 1.95583, PDV_STOPA = 0.17;
+
+/* "30.303,34" / "30303,34" / "1.676809" -> sayi.  Iki ayrac varsa
+   sagdaki ondalik kabul edilir; tek ayrac ondalik sayilir. */
+function sayi(t){
+  t = String(t == null ? '' : t).replace(/\s/g, '');
+  if (!t) return null;
+  var sn = t.lastIndexOf('.'), sv = t.lastIndexOf(',');
+  if (sn >= 0 && sv >= 0){
+    var ond = Math.max(sn, sv), bin = Math.min(sn, sv);
+    t = t.substring(0, bin).replace(/[.,]/g, '') +
+        t.substring(bin + 1, ond).replace(/[.,]/g, '') + '.' + t.substring(ond + 1);
+  } else if (sv >= 0) t = t.replace(',', '.');
+  var v = parseFloat(t);
+  return isFinite(v) ? v : null;
+}
+function bicim(v, ond){
+  if (v == null || !isFinite(v)) return '\u2014';
+  ond = ond == null ? 2 : ond;
+  var neg = v < 0; v = Math.abs(v);
+  var s = v.toFixed(ond), pr = s.split('.');
+  var ip = pr[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return (neg ? '-' : '') + ip + (pr[1] ? ',' + pr[1] : '');
+}
+
+var KALK = ['Kurs','Carina','Pdv','Tra','Spb','Spp','Ost','ExwMan'];
+
+function kalkOku(){
+  var o = {};
+  KALK.forEach(function(k){
+    var inp = el('i' + k); if (!inp) return;
+    var v = sayi(inp.value);
+    o[k] = v;
+    var e = el('e' + k);
+    if (e) e.textContent = v == null ? '' : bicim(v, k === 'Kurs' ? 6 : 2);
+    inp.className = 'kin' + (v == null && inp.value ? ' bos' : '');
+  });
+  return o;
+}
+
+function kalkCiz(){
+  if (!S){ el('kalkSec').className = 'sec hide'; return; }
+  el('kalkSec').className = 'sec';
+
+  var mal = 0, nemal = 0, tum = 0, iskonto = 0, iskVar = false;
+  S.res.satirlar.forEach(function(s){
+    tum += s.tutar;
+    if (s.sinif === K.URUN) mal += s.tutar; else nemal += s.tutar;
+    if (s.iskonto != null){ iskonto += s.iskonto; iskVar = true; }
+  });
+  mal /= 10000; nemal /= 10000; tum /= 10000; iskonto /= 10000;
+
+  el('kMal').textContent   = bicim(mal) + ' USD';
+  el('kNemal').textContent = bicim(nemal) + ' USD';
+  el('kTum').textContent   = bicim(tum) + ' USD';
+
+  var o = kalkOku();
+  var exw = iskVar ? (tum - iskonto) : o.ExwMan;
+  el('exwManRow').style.display  = iskVar ? 'none' : 'flex';
+  el('exwManHint').style.display = iskVar ? 'none' : 'block';
+  el('kExw').textContent = exw == null ? '\u2014' : bicim(exw) + ' USD';
+
+  var kurs = o.Kurs, traKM = o.Tra == null ? null : o.Tra * EUR_KM;
+
+  var iznos = (kurs == null) ? null : mal * kurs;
+  el('rIznos').textContent = iznos == null ? '\u2014' : bicim(iznos) + ' KM';
+  el('rPdv').textContent   = o.Pdv == null ? '\u2014' : bicim(o.Pdv) + ' KM';
+  el('rTot').textContent   = (iznos == null || o.Pdv == null) ? '\u2014' : bicim(iznos + o.Pdv) + ' KM';
+  el('rKurs').textContent  = kurs == null ? '\u2014' : bicim(kurs, 6);
+
+  var z = [['zCarina', o.Carina], ['zTra', traKM], ['zSpb', o.Spb],
+           ['zSpp', o.Spp], ['zOst', o.Ost]], zt = 0, zv = false;
+  z.forEach(function(x){
+    el(x[0]).textContent = x[1] == null ? '\u2014' : bicim(x[1]) + ' KM';
+    if (x[1] != null){ zt += x[1]; zv = true; }
+  });
+  el('zTot').textContent = zv ? bicim(zt) + ' KM' : '\u2014';
+
+  /* capraz kontrol: PDV osnovicasi iki yoldan */
+  var m = '';
+  if (o.Pdv != null && kurs != null && exw != null &&
+      o.Carina != null && traKM != null && o.Ost != null){
+    var bel = o.Pdv / PDV_STOPA;
+    var hes = exw * kurs + traKM + o.Ost + o.Carina;
+    var fark = bel - hes;
+    /* gozlenen yuvarlama gurultusu 0,01-0,02 KM (satir basina pro-rata
+       iskonto yuvarlamasi) - 0,50 hem onu tolere eder hem gercek hatayi yakalar */
+    var ok = Math.abs(fark) <= 0.50;
+    m = '<div class="msg ' + (ok ? 'ok' : 'err') + '">' +
+        '<b>PDV osnovica kontrola</b><br>' +
+        'iz deklaracije (PDV &divide; 0,17): <b>' + bicim(bel) + ' KM</b><br>' +
+        'izracunato (EXW&times;kurs + transport + ostalo + carina): <b>' + bicim(hes) + ' KM</b><br>' +
+        'razlika: <b>' + bicim(fark) + ' KM</b> &mdash; ' +
+        (ok ? 'slaze se' : 'NE SLAZE SE, provjeri kurs / carinu / PDV / EXW') + '</div>';
+  } else {
+    m = '<div class="msg warn">Popuni kurs, carinu, PDV, transport i ostalo ' +
+        '&mdash; onda se radi kontrola PDV osnovice.</div>';
+  }
+  el('kontrolMsg').innerHTML = m;
+}
+
+KALK.forEach(function(k){
+  var inp = el('i' + k);
+  if (inp) inp.addEventListener('input', kalkCiz);
+});
+
+el('bKalkKopya').onclick = function(){
+  var o = kalkOku(), mal = 0;
+  S.res.satirlar.forEach(function(s){ if (s.sinif === K.URUN) mal += s.tutar; });
+  mal /= 10000;
+  var kurs = o.Kurs, iznos = kurs == null ? null : mal * kurs;
+  var L = [];
+  L.push('KALKULACIJA  ' + (S.res.fatura || '') + '  ' + (S.res.tarih || ''));
+  L.push('');
+  L.push('ROBNO');
+  L.push('  Iznos fakture bez PDV-a\t' + bicim(iznos));
+  L.push('  PDV\t' + bicim(o.Pdv));
+  L.push('  Ukupno\t' + bicim(iznos == null || o.Pdv == null ? null : iznos + o.Pdv));
+  L.push('  Kurs\t' + bicim(kurs, 6));
+  L.push('');
+  L.push('ZAVISNI TROSKOVI (KM)');
+  L.push('  Carina\t' + bicim(o.Carina));
+  L.push('  Transport\t' + bicim(o.Tra == null ? null : o.Tra * EUR_KM));
+  L.push('  Spedicija bez PDV\t' + bicim(o.Spb));
+  L.push('  Spedicija PDV\t' + bicim(o.Spp));
+  L.push('  Ostalo\t' + bicim(o.Ost));
+  navigator.clipboard.writeText(L.join('\n')).then(function(){
+    el('bKalkKopya').textContent = 'kopirano';
+    setTimeout(function(){ el('bKalkKopya').textContent = 'kalkulaciju u clipboard'; }, 1600);
   });
 };
 
