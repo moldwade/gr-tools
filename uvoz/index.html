@@ -21,6 +21,13 @@ header{text-align:center;margin-bottom:34px}
   border:1px solid rgba(255,255,255,.16);color:#aaa;margin:3px}
 .pill.warn{border-color:rgba(255,190,0,.5);color:#ffbe00;background:rgba(255,190,0,.07)}
 
+.drz{display:inline-flex;gap:0;border:1px solid rgba(255,255,255,.16);
+  border-radius:11px;overflow:hidden;margin-bottom:14px}
+.drz button{border:none;border-radius:0;padding:9px 20px;font-size:13px;
+  background:transparent;color:#888;font-weight:600}
+.drz button.on{background:linear-gradient(135deg,#c8333a,#96262c);color:#fff}
+.drz button:hover:not(.on){background:rgba(255,255,255,.07);color:#ccc}
+
 .drop{border:1.5px dashed rgba(255,255,255,.2);border-radius:16px;padding:44px 24px;text-align:center;
   background:rgba(255,255,255,.03);transition:.25s;cursor:pointer}
 .drop:hover,.drop.over{border-color:rgba(200,51,58,.65);background:rgba(200,51,58,.07)}
@@ -96,7 +103,11 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
   <h1>Uvoz Robe</h1>
   <div class="divider"></div>
   <div class="sub">Fabrika sevkiyat Excel'i → Tehnokom Robno uvoz CSV'si</div>
-  <div style="margin-top:12px">
+  <div class="drz" id="drzava">
+    <button data-d="BiH" class="on">BiH &middot; Robno</button>
+    <button data-d="HR">HR &middot; 4Dwand</button>
+  </div>
+  <div>
     <span class="pill" id="havuzPill"></span>
     <span class="pill" id="yasPill"></span>
   </div>
@@ -152,7 +163,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
         <h4>Upisi sa papira</h4>
         <div class="krow"><span class="lbl">Kurs</span>
           <span class="kecho" id="eKurs"></span><input class="kin" id="iKurs" inputmode="decimal" placeholder="1,676809"></div>
-        <div class="khint">carinska deklaracija, polje 23</div>
+        <div class="khint" id="kursHint">carinska deklaracija, polje 23</div>
         <div class="krow"><span class="lbl">Carina</span>
           <span class="kecho" id="eCarina"></span><input class="kin" id="iCarina" inputmode="decimal" placeholder="0,00"></div>
         <div class="khint">ASYCUDA, tax 001</div>
@@ -161,13 +172,15 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
         <div class="khint">ASYCUDA, tax 090</div>
         <div class="krow"><span class="lbl">Transport (EUR)</span>
           <span class="kecho" id="eTra"></span><input class="kin" id="iTra" inputmode="decimal" placeholder="0,00"></div>
-        <div class="khint">prevoznik &middot; x 1,95583 u KM</div>
+        <div class="khint" id="traHint">prevoznik &middot; x 1,95583 u KM</div>
         <div class="krow"><span class="lbl">Spedicija bez PDV</span>
           <span class="kecho" id="eSpb"></span><input class="kin" id="iSpb" inputmode="decimal" placeholder="0,00"></div>
         <div class="krow"><span class="lbl">Spedicija PDV</span>
           <span class="kecho" id="eSpp"></span><input class="kin" id="iSpp" inputmode="decimal" placeholder="0,00"></div>
         <div class="krow"><span class="lbl">Ostalo</span>
           <span class="kecho" id="eOst"></span><input class="kin" id="iOst" inputmode="decimal" placeholder="0,00"></div>
+        <div class="krow" id="pdvStopaRow" style="display:none"><span class="lbl">PDV stopa (%)</span>
+          <span class="kecho" id="ePdvSt"></span><input class="kin" id="iPdvSt" inputmode="decimal" placeholder="25"></div>
         <div class="khint">Prilog 9 (PZT), ukupno KM</div>
         <div class="krow" id="exwManRow" style="display:none"><span class="lbl">EXW (USD)</span>
           <span class="kecho" id="eExwMan"></span><input class="kin" id="iExwMan" inputmode="decimal" placeholder="0,00"></div>
@@ -346,7 +359,12 @@ var BOM = String.fromCharCode(0xFEFF);
    2) barkodi.csv surukle-birak -> localStorage'da kalir, gomulu olani ezer
    Ikincisi Python olmayan makinede tazeleme icin ve havuzu icermeyen
    (public site) surumu icin var. */
-var LS_ANAHTAR = 'uvoz.barkodi';
+var DRZAVA = 'BiH';                     /* BiH (Robno) | HR (4Dwand) */
+function lsAnahtar(){ return 'uvoz.barkodi.' + DRZAVA; }
+var LS_ANAHTAR = lsAnahtar();
+/* BiH: tutar x10000, kurs robno'da; HR: tutar kurs ile EUR'a cevrilir */
+function hr(){ return DRZAVA === 'HR'; }
+function paraAdi(){ return hr() ? 'EUR' : 'KM'; }
 var HAVUZ = Object.create(null), HAVUZ_META = null;
 
 function havuzKur(metin, meta){
@@ -383,14 +401,38 @@ function havuzYaz(){
 /* once gomulu, sonra varsa localStorage'daki daha yeni liste */
 havuzKur(document.getElementById('havuzData').textContent,
          {kaynak: HAVUZ_KAYNAK || 'gömülü', tarih: HAVUZ_TARIH, yuklenen: false});
-(function(){
+function havuzLsOku(){
   try {
-    var raw = localStorage.getItem(LS_ANAHTAR);
+    var raw = localStorage.getItem(lsAnahtar());
     if (!raw) return;
     var o = JSON.parse(raw);
     if (o && o.metin && (!HAVUZ_META.sayi || o.tarih >= HAVUZ_META.tarih))
       havuzKur(o.metin, {kaynak: o.kaynak || 'barkodi.csv', tarih: o.tarih, yuklenen: true});
   } catch (e) { /* private mode / kapali depolama - gomulu liste kullanilir */ }
+}
+havuzLsOku();
+
+/* Ulke degisince: havuz sifirdan kurulur (BiH gomulu + kendi LS'i, HR sadece LS) */
+function drzavaSec(d){
+  if (d === DRZAVA) return;
+  DRZAVA = d;
+  var b = document.getElementById('drzava').getElementsByTagName('button');
+  for (var i = 0; i < b.length; i++)
+    b[i].className = (b[i].getAttribute('data-d') === d) ? 'on' : '';
+  havuzKur(hr() ? '' : el('havuzData').textContent,
+           {kaynak: hr() ? '' : (HAVUZ_KAYNAK || 'gömülü'), tarih: HAVUZ_TARIH, yuklenen: false});
+  havuzLsOku();
+  try { localStorage.setItem('uvoz.drzava', d); } catch (e) {}
+  if (S) goster(S.res, S.dosya); else kalkCiz();
+}
+(function(){
+  var w = document.getElementById('drzava').getElementsByTagName('button');
+  for (var i = 0; i < w.length; i++)
+    w[i].onclick = (function(x){ return function(){ drzavaSec(x.getAttribute('data-d')); }; })(w[i]);
+  try {
+    var d = localStorage.getItem('uvoz.drzava');
+    if (d === 'HR') drzavaSec('HR');
+  } catch (e) {}
 })();
 if (typeof XLSX === 'undefined') document.getElementById('cdnErr').classList.remove('hide');
 
@@ -669,8 +711,53 @@ fileIn.onchange = function(){ if (fileIn.files[0]) dosyaYonlendir(fileIn.files[0
    kendisi anlar.  Onceden barkodi.csv buraya birakilinca fatura sanilip
    "zorunlu kolon yok" hatasi veriyordu - basligi 'barkod' ve bu BARCODE ile
    eslesiyor. */
+/* 4D Wand "Artikli" export'u: 'Sifra' + 'Bar kod' basliklari var,
+   fabrika faturasinin BARCODE/QTY basliklari yok. */
+function wandListesi(wb){
+  var ws = wb.Sheets[wb.SheetNames[0]];
+  var rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null, blankrows:false});
+  for (var i = 0; i < Math.min(10, rows.length); i++){
+    var h = rows[i].map(normBaslik);
+    var ib = h.indexOf('BAR KOD'), is = h.indexOf('SIFRA');
+    if (ib < 0) ib = h.indexOf('BARKOD');
+    if (ib >= 0 && h.indexOf('QTY') < 0 && h.indexOf('INVOICE GROSS AMOUNT') < 0){
+      var out = [];
+      for (var r = i + 1; r < rows.length; r++){
+        var b = barkodStr(rows[r][ib])[0];
+        if (!b) continue;
+        var sf = (is >= 0 && rows[r][is] != null) ? String(rows[r][is]).trim() : '';
+        out.push(b + ':' + sf);
+      }
+      return out;
+    }
+  }
+  return null;
+}
+
 function dosyaYonlendir(f){
-  if (/\.(xlsx|xlsm|xls)$/i.test(f.name || '')) { yukle(f); return; }
+  if (/\.(xlsx|xlsm|xls)$/i.test(f.name || '')) {
+    var rd0 = new FileReader();
+    rd0.onload = function(e){
+      var wb;
+      try { wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true}); }
+      catch (err){ yukle(f); return; }
+      var liste = wandListesi(wb);
+      if (liste && liste.length){
+        havuzKur(liste.join('\n'),
+          {kaynak: '4D Wand · ' + (f.name || '').slice(0, 28),
+           tarih: new Date(f.lastModified).toISOString().substring(0,10), yuklenen: true});
+        try { localStorage.setItem(lsAnahtar(), JSON.stringify(
+          {metin: liste.join('\n'), tarih: HAVUZ_META.tarih, kaynak: HAVUZ_META.kaynak})); } catch (er) {}
+        el('out').classList.remove('hide');
+        el('listeBilgi').textContent = liste.length + ' barkod yüklendi (' + DRZAVA + ') ve kaydedildi';
+        if (S) goster(S.res, S.dosya);
+        return;
+      }
+      yukleWb(wb, f.name);
+    };
+    rd0.readAsArrayBuffer(f);
+    return;
+  }
   var rd = new FileReader();
   rd.onload = function(e){
     var txt = String(e.target.result);
@@ -688,27 +775,54 @@ function dosyaYonlendir(f){
   rd.readAsText(f, 'utf-8');
 }
 
+function yukleWb(wb, ad){
+  try {
+    goster(okuFatura(wb), ad);
+  } catch (err) {
+    el('out').classList.remove('hide');
+    el('msgs').innerHTML = '<div class="msg err"><b>Okunamadi:</b> ' + esc(err.message) + '</div>';
+    console.error(err);
+  }
+}
 function yukle(f){
   var rd = new FileReader();
   rd.onload = function(e){
-    try {
-      var wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
-      var res = okuFatura(wb);
-      goster(res, f.name);
-    } catch (err) {
+    var wb;
+    try { wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true}); }
+    catch (err) {
       el('out').classList.remove('hide');
       el('msgs').innerHTML = '<div class="msg err"><b>Okunamadi:</b> ' + esc(err.message) + '</div>';
-      console.error(err);
+      return;
     }
+    yukleWb(wb, f.name);
   };
   rd.readAsArrayBuffer(f);
 }
 
 function stem(){ return (S.res.fatura || 'uvoz').replace(/[^\w.-]+/g,'_'); }
-el('bUvoz').onclick  = function(){ indir(stem()+'_uvoz.csv',
-  csvMetin(S.uvoz.map(function(s){ return [s.barkod, s.adet, s.tutar]; }))); };
-el('bUvoz5').onclick = function(){ indir(stem()+'_uvoz5.csv',
-  csvMetin(S.uvoz.map(function(s){ return [s.barkod, s.adet, s.tutar, virgul(s.tutar), virgul(s.bfiyat)]; }))); };
+
+/* BiH -> uvoz.csv 3. kolon = tutar x 10000 (tam sayi, robno bekliyor)
+   HR   -> 3. kolon = tutar EUR, virgullu, x10000 yok */
+function uvozSatirlari(){
+  return S.uvoz.map(function(s){
+    var t = satirTutar(s);
+    return [s.barkod, s.adet, hr() ? (t == null ? '' : virgul(t)) : t];
+  });
+}
+function kursYok(){
+  if (!hr() || sayi(el('iKurs').value) != null) return false;
+  el('msgs').innerHTML = '<div class="msg warn"><b>Kurs girilmedi.</b> ' +
+    'HR modunda tutar USD&rarr;EUR &ccedil;evriliyor &mdash; Kalkulacija b&ouml;l&uuml;m&uuml;ndeki ' +
+    'Kurs alan&#305;na carinska deklaracija&#39;daki kuru yaz.</div>';
+  return true;
+}
+el('bUvoz').onclick  = function(){ if (kursYok()) return;
+  indir(stem()+'_uvoz.csv', csvMetin(uvozSatirlari())); };
+el('bUvoz5').onclick = function(){ if (kursYok()) return;
+  indir(stem()+'_uvoz5.csv',
+  csvMetin(S.uvoz.map(function(s){
+    var t = satirTutar(s);
+    return [s.barkod, s.adet, hr() ? virgul(t) : s.tutar, virgul(t), virgul(s.bfiyat)]; }))); };
 el('bYeni').onclick  = function(){ indir(stem()+'_yeni_artikli.csv',
   csvMetin([['barkod','stock_code','isim','grup','adet','tutar','birim_fiyat']].concat(
     S.yeni.map(function(s){ return [s.barkod, s.kod, s.isim, s.grup, s.adet, virgul(s.tutar), virgul(s.bfiyat)]; }))), true); };
@@ -716,7 +830,8 @@ el('bAtil').onclick  = function(){ indir(stem()+'_atilanlar.csv',
   csvMetin([['sinif','barkod','stock_code','isim','grup','adet','tutar','birim_fiyat']].concat(
     S.atil.map(function(s){ return [s.sinif, s.barkod, s.kod, s.isim, s.grup, s.adet, virgul(s.tutar), virgul(s.bfiyat)]; }))), true); };
 el('bKopya').onclick = function(){
-  var t = S.uvoz.map(function(s){ return [s.barkod, s.adet, s.tutar].join('\t'); }).join('\n');
+  if (kursYok()) return;
+  var t = uvozSatirlari().map(function(r){ return r.join('\t'); }).join('\n');
   navigator.clipboard.writeText(t).then(function(){
     el('bKopya').textContent = 'kopyalandi';
     setTimeout(function(){ el('bKopya').textContent = "uvoz'u panoya kopyala"; }, 1600);
@@ -753,7 +868,17 @@ function bicim(v, ond){
   return (neg ? '-' : '') + ip + (pr[1] ? ',' + pr[1] : '');
 }
 
-var KALK = ['Kurs','Carina','Pdv','Tra','Spb','Spp','Ost','ExwMan'];
+var KALK = ['Kurs','Carina','Pdv','Tra','Spb','Spp','Ost','ExwMan','PdvSt'];
+
+/* HR: satir tutari kurs ile USD->EUR cevrilir (1/10000 tam sayi biriminde).
+   BiH: cevrim yok, robno kendi yapiyor. */
+function satirTutar(s){
+  if (!hr()) return s.tutar;
+  var k = sayi(el('iKurs').value);
+  if (k == null) return null;
+  /* para 2 ondalik: 1/10000 biriminde kurusa yuvarla (109,44 x 0,9047 -> 99,01) */
+  return Math.round(s.tutar * k / 100) * 100;
+}
 
 function kalkOku(){
   var o = {};
@@ -784,38 +909,48 @@ function kalkCiz(){
     mal /= 10000; nemal /= 10000; tum /= 10000; iskonto /= 10000;
   }
 
+  el('kursHint').textContent = hr()
+    ? 'carinska deklaracija · USD → EUR (~0,90)'
+    : 'carinska deklaracija, polje 23 · USD → KM';
+  el('traHint').textContent = hr()
+    ? 'prevoznik · već u EUR, ne pretvara se'
+    : 'prevoznik · x 1,95583 u KM';
   el('kMal').textContent   = mal   == null ? '\u2014' : bicim(mal) + ' USD';
   el('kNemal').textContent = nemal == null ? '\u2014' : bicim(nemal) + ' USD';
   el('kTum').textContent   = tum   == null ? '\u2014' : bicim(tum) + ' USD';
 
   var o = kalkOku();
+  el('pdvStopaRow').style.display = hr() ? 'flex' : 'none';
+  var stopa = hr() ? (o.PdvSt == null ? 25 : o.PdvSt) / 100 : PDV_STOPA;
   var exw = iskVar ? (tum - iskonto) : o.ExwMan;
   el('exwManRow').style.display  = iskVar ? 'none' : 'flex';
   el('exwManHint').style.display = iskVar ? 'none' : 'block';
   if (!S) el('exwManHint').textContent = 'fatura yüklenmedi — EXW TOTAL\'i sen gir';
   el('kExw').textContent = exw == null ? '\u2014' : bicim(exw) + ' USD';
 
-  var kurs = o.Kurs, traKM = o.Tra == null ? null : o.Tra * EUR_KM;
+  /* HR euro bolgesinde: transport zaten EUR, cevrilmez.  BiH: EUR->KM sabit. */
+  var kurs = o.Kurs, traKM = o.Tra == null ? null : (hr() ? o.Tra : o.Tra * EUR_KM);
+  var PB = paraAdi();
 
   var iznos = (kurs == null || mal == null) ? null : mal * kurs;
-  el('rIznos').textContent = iznos == null ? '\u2014' : bicim(iznos) + ' KM';
-  el('rPdv').textContent   = o.Pdv == null ? '\u2014' : bicim(o.Pdv) + ' KM';
-  el('rTot').textContent   = (iznos == null || o.Pdv == null) ? '\u2014' : bicim(iznos + o.Pdv) + ' KM';
+  el('rIznos').textContent = iznos == null ? '\u2014' : bicim(iznos) + ' ' + PB;
+  el('rPdv').textContent   = o.Pdv == null ? '\u2014' : bicim(o.Pdv) + ' ' + PB;
+  el('rTot').textContent   = (iznos == null || o.Pdv == null) ? '\u2014' : bicim(iznos + o.Pdv) + ' ' + PB;
   el('rKurs').textContent  = kurs == null ? '\u2014' : bicim(kurs, 6);
 
   var z = [['zCarina', o.Carina], ['zTra', traKM], ['zSpb', o.Spb],
            ['zSpp', o.Spp], ['zOst', o.Ost]], zt = 0, zv = false;
   z.forEach(function(x){
-    el(x[0]).textContent = x[1] == null ? '\u2014' : bicim(x[1]) + ' KM';
+    el(x[0]).textContent = x[1] == null ? '\u2014' : bicim(x[1]) + ' ' + PB;
     if (x[1] != null){ zt += x[1]; zv = true; }
   });
-  el('zTot').textContent = zv ? bicim(zt) + ' KM' : '\u2014';
+  el('zTot').textContent = zv ? bicim(zt) + ' ' + PB : '\u2014';
 
   /* capraz kontrol: PDV osnovicasi iki yoldan */
   var m = '';
   if (o.Pdv != null && kurs != null && exw != null &&
       o.Carina != null && traKM != null && o.Ost != null){
-    var bel = o.Pdv / PDV_STOPA;
+    var bel = o.Pdv / stopa;
     var hes = exw * kurs + traKM + o.Ost + o.Carina;
     var fark = bel - hes;
     /* gozlenen yuvarlama gurultusu 0,01-0,02 KM (satir basina pro-rata
@@ -823,9 +958,9 @@ function kalkCiz(){
     var ok = Math.abs(fark) <= 0.50;
     m = '<div class="msg ' + (ok ? 'ok' : 'err') + '">' +
         '<b>PDV osnovica kontrola</b><br>' +
-        'iz deklaracije (PDV &divide; 0,17): <b>' + bicim(bel) + ' KM</b><br>' +
-        'izracunato (EXW&times;kurs + transport + ostalo + carina): <b>' + bicim(hes) + ' KM</b><br>' +
-        'razlika: <b>' + bicim(fark) + ' KM</b> &mdash; ' +
+        'iz deklaracije (PDV &divide; ' + bicim(stopa, 2) + '): <b>' + bicim(bel) + ' ' + PB + '</b><br>' +
+        'izracunato (EXW&times;kurs + transport + ostalo + carina): <b>' + bicim(hes) + ' ' + PB + '</b><br>' +
+        'razlika: <b>' + bicim(fark) + ' ' + PB + '</b> &mdash; ' +
         (ok ? 'slaze se' : 'NE SLAZE SE, provjeri kurs / carinu / PDV / EXW') + '</div>';
   } else {
     m = '<div class="msg warn">Popuni kurs, carinu, PDV, transport i ostalo ' +
@@ -857,9 +992,9 @@ el('bKalkKopya').onclick = function(){
   L.push('  Ukupno\t' + bicim(iznos == null || o.Pdv == null ? null : iznos + o.Pdv));
   L.push('  Kurs\t' + bicim(kurs, 6));
   L.push('');
-  L.push('ZAVISNI TROSKOVI (KM)');
+  L.push('ZAVISNI TROSKOVI (' + paraAdi() + ')');
   L.push('  Carina\t' + bicim(o.Carina));
-  L.push('  Transport\t' + bicim(o.Tra == null ? null : o.Tra * EUR_KM));
+  L.push('  Transport\t' + bicim(o.Tra == null ? null : (hr() ? o.Tra : o.Tra * EUR_KM)));
   L.push('  Spedicija bez PDV\t' + bicim(o.Spb));
   L.push('  Spedicija PDV\t' + bicim(o.Spp));
   L.push('  Ostalo\t' + bicim(o.Ost));
@@ -870,7 +1005,7 @@ el('bKalkKopya').onclick = function(){
 };
 
 /* ---- Kalkulacija defteri: her sevkiyat bir satir, kalici iz ---- */
-var KALK_KOLON = ['fatura_no','fatura_tarih','kaynak_dosya','valuta',
+var KALK_KOLON = ['drzava','fatura_no','fatura_tarih','kaynak_dosya','valuta',
   'roba','nije_roba','ukupno','exw','kurs',
   'iznos_bez_pdv','pdv','ukupno_sa_pdv',
   'carina','transport_eur','transport_km','sped_bez_pdv','sped_pdv','ostalo',
@@ -887,18 +1022,20 @@ function kalkSatir(){
   });
   mal /= 10000; nemal /= 10000; tum /= 10000; isk /= 10000;
   var exw   = iskVar ? (tum - isk) : o.ExwMan;
-  var traKM = o.Tra == null ? null : o.Tra * EUR_KM;
+  var traKM = o.Tra == null ? null : (hr() ? o.Tra : o.Tra * EUR_KM);
   var iznos = (o.Kurs == null) ? null : mal * o.Kurs;
+  var stopa = hr() ? (o.PdvSt == null ? 25 : o.PdvSt) / 100 : PDV_STOPA;
   var zt = null;
   [o.Carina, traKM, o.Spb, o.Spp, o.Ost].forEach(function(v){
     if (v != null) zt = (zt || 0) + v; });
   var razlika = null;
   if (o.Pdv != null && o.Kurs != null && exw != null &&
       o.Carina != null && traKM != null && o.Ost != null)
-    razlika = o.Pdv / PDV_STOPA - (exw * o.Kurs + traKM + o.Ost + o.Carina);
+    razlika = o.Pdv / stopa - (exw * o.Kurs + traKM + o.Ost + o.Carina);
 
   function n(v, d){ return v == null ? '' : bicim(v, d); }
-  return [S.res.fatura || '', S.res.tarih || '', S.dosya, 'USD/KM',
+  return [DRZAVA, S.res.fatura || '', S.res.tarih || '', S.dosya,
+          hr() ? 'USD/EUR' : 'USD/KM',
           n(mal), n(nemal), n(tum), n(exw), n(o.Kurs, 6),
           n(iznos), n(o.Pdv), (iznos == null || o.Pdv == null) ? '' : bicim(iznos + o.Pdv),
           n(o.Carina), n(o.Tra), n(traKM), n(o.Spb), n(o.Spp), n(o.Ost),
@@ -910,8 +1047,8 @@ function kalkDefterBirlesik(){
   var eski = KALK_DEFTER ? KALK_DEFTER.satir : [];
   if (!yeni) return {kolon: KALK_KOLON, satir: eski, ekle: 0};
   var varmi = Object.create(null);
-  eski.forEach(function(r){ varmi[(r[0] || '') + '|' + (r[2] || '')] = 1; });
-  var anahtar = yeni[0] + '|' + yeni[2];
+  eski.forEach(function(r){ varmi[(r[1] || '') + '|' + (r[3] || '')] = 1; });
+  var anahtar = yeni[1] + '|' + yeni[3];
   var ekle = varmi[anahtar] ? [] : [yeni];
   return {kolon: KALK_KOLON, satir: eski.concat(ekle), ekle: ekle.length,
           mukerrer: !!varmi[anahtar]};
@@ -991,7 +1128,7 @@ function listeUygula(f, txt){
     var metin = satir.join('\n');
     if (!tarih) tarih = new Date(f.lastModified).toISOString().substring(0,10);
     havuzKur(metin, {kaynak: kaynak, tarih: tarih, yuklenen: true});
-    try { localStorage.setItem(LS_ANAHTAR,
+    try { localStorage.setItem(lsAnahtar(),
             JSON.stringify({metin: metin, tarih: tarih, kaynak: kaynak})); }
     catch (err){ el('listeBilgi').textContent =
       satir.length + ' barkod yüklendi (kaydedilemedi — sayfayı yenileyince gider)'; return; }
@@ -1001,9 +1138,9 @@ function listeUygula(f, txt){
   }
 }
 el('bListeSil').onclick = function(){
-  try { localStorage.removeItem(LS_ANAHTAR); } catch (e) {}
-  havuzKur(el('havuzData').textContent,
-           {kaynak: HAVUZ_KAYNAK || 'gömülü', tarih: HAVUZ_TARIH, yuklenen: false});
+  try { localStorage.removeItem(lsAnahtar()); } catch (e) {}
+  havuzKur(hr() ? '' : el('havuzData').textContent,
+           {kaynak: hr() ? '' : (HAVUZ_KAYNAK || 'gömülü'), tarih: HAVUZ_TARIH, yuklenen: false});
   el('listeBilgi').textContent = 'gömülü listeye dönüldü';
   if (S) goster(S.res, S.dosya);
 };
