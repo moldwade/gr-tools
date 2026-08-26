@@ -858,8 +858,8 @@ function kursYok(){
 }
 el('bUvoz').onclick  = function(){ if (kursYok()) return;
   indir(stem()+'_uvoz.csv', csvMetin(uvozSatirlari())); };
-/* Elle girmek icin aciliyor - barkod METIN olmali, yoksa Excel
-   8691190591250'yi 8,69119E+12 yapar. */
+/* Elle girmek icin aciliyor - barkod METIN hucresi olmali, yoksa Excel
+   13 haneli barkodu bilimsel gosterime cevirir (8,69E+12). */
 function yeniXlsx(){
   var pb = hr() ? 'EUR' : 'USD';
   var bas = ['Barkod', 'Stock code', 'Naziv', 'Grupa', 'Količina',
