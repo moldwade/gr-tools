@@ -113,7 +113,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
   <h1>Uvoz Robe</h1>
   <div class="divider"></div>
   <div class="sub">Fabrika sevkiyat Excel'i → Robno / 4Dwand uvoz
-    <span class="ver">&middot; v1.5 &middot; 2026-08-26</span></div>
+    <span class="ver">&middot; v1.6 &middot; 2026-08-26</span></div>
   <div class="drz" id="drzava">
     <button data-d="BiH" class="on">BiH &middot; Robno</button>
     <button data-d="HR">HR &middot; 4Dwand</button>
@@ -260,6 +260,15 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
     <div class="scroll"><table id="tYeni"></table></div>
   </div>
 
+  <div class="sec" id="klasaSec">
+    <div class="sec-t">Klasa 0 &mdash; testeri / stalci / moduli (muhasebeciye)</div>
+    <div id="klasaOzet" class="kalk" style="grid-template-columns:1fr"></div>
+    <div class="btns" style="margin-top:14px">
+      <button class="primary" id="bKlasaMail">mail i&ccedil;in panoya kopyala</button>
+      <button id="bKlasaXlsx">klasa0.xlsx</button>
+    </div>
+  </div>
+
   <div class="sec" id="atilSec">
     <div class="sec-t">Atılan satırlar</div>
     <div id="atilDagilim" style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:7px"></div>
@@ -281,7 +290,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
   5. kolon robno'nun <b>Cijena</b> alanıdır, kolon silme.<br>
   <b>uvoz · HR</b> — <code>barkod;adet;tutar EUR</code>, ×10000 yok, panoya kopyala.<br>
   Barkod havuzunu tazelemek için: <code>../analiza-pj/.venv/bin/python uvoz.py --tazele</code><br>
-  <span class="ver">uvoz v1.5 &middot; üretim 2026-08-26</span>
+  <span class="ver">uvoz v1.6 &middot; üretim 2026-08-26</span>
 </div>
 
 </div>
@@ -358,7 +367,7 @@ var K = {
   "adet",
   "tutar"
  ],
- "SURUM": "1.5",
+ "SURUM": "1.6",
  "DEFTER_KOLON": [
   "fatura_no",
   "fatura_tarih",
@@ -1033,6 +1042,7 @@ function kalkCiz(){
         '&mdash; onda se radi kontrola PDV osnovice.</div>';
   }
   el('kontrolMsg').innerHTML = m;
+  if (typeof klasaCiz === 'function') klasaCiz();
   if (typeof kalkDefterBilgi === 'function') kalkDefterBilgi();
 }
 
@@ -1260,6 +1270,205 @@ el('bYeniHtml').onclick = function(){
 };
 
 el('cYeniFiyat').addEventListener('change', function(){ if (S) goster(S.res, S.dosya); });
+
+/* ---- Klasa 0: tester/stalak/modul, muhasebeciye KM cinsinden ----
+   Indirim TAMAMEN urun disina yuklenir - Tugay'in kurali; olculdu:
+   mal(bruto) + urun_disi(bruto - tum indirim) = faturadaki EXW TOTAL, fark 0,00.
+   Satir basina indirim urun disi grubu icinde bruto ile orantili dagitilir;
+   yuvarlama artigi en buyuk satira eklenerek toplam bire bir tutturulur. */
+function klasa0(){
+  if (!S) return null;
+  var kurs = sayi(el('iKurs').value);
+  var sat = [], brutoT = 0, iskT = 0;
+  S.res.satirlar.forEach(function(x){
+    if (x.sinif !== K.URUN){ sat.push(x); brutoT += x.tutar; }
+    if (x.iskonto != null) iskT += x.iskonto;
+  });
+  if (!sat.length) return null;
+  /* kurusa yuvarlanir: mal(bruto) + urun_disi(neto) = EXW TOTAL bunda da kapaniyor */
+  var netoT = Math.round((brutoT - iskT) / 100) * 100;
+
+  /* satir basina neto (kurus), artik en buyuk satira */
+  var neto = sat.map(function(x){
+    return Math.round(x.tutar * netoT / brutoT / 100) * 100; });
+  var enB = 0;
+  sat.forEach(function(x, i){ if (x.tutar > sat[enB].tutar) enB = i; });
+  neto[enB] += netoT - neto.reduce(function(a, b){ return a + b; }, 0);
+
+  var kmT = kurs == null ? null : Math.round(netoT * kurs / 100) * 100;
+  var km = neto.map(function(v){
+    return kurs == null ? null : Math.round(v * kurs / 100) * 100; });
+  if (kurs != null){
+    var s2 = km.reduce(function(a, b){ return a + b; }, 0);
+    km[enB] += kmT - s2;
+  }
+
+  /* sinif ozeti */
+  var gr = {}, sira = [];
+  sat.forEach(function(x, i){
+    if (!gr[x.sinif]){ gr[x.sinif] = {n:0, bruto:0, neto:0, km:0}; sira.push(x.sinif); }
+    var g = gr[x.sinif];
+    g.n++; g.bruto += x.tutar; g.neto += neto[i]; if (kurs != null) g.km += km[i];
+  });
+  sira.sort(function(a, b){ return gr[b].bruto - gr[a].bruto; });
+
+  return {sat:sat, neto:neto, km:km, brutoT:brutoT, iskT:iskT, netoT:netoT,
+          kmT:kmT, gr:gr, sira:sira, kurs:kurs, pb:paraAdi()};
+}
+
+function klasaCiz(){
+  var Kl = klasa0();
+  if (!Kl){ el('klasaSec').className = 'sec hide'; return; }
+  el('klasaSec').className = 'sec';
+  var h = '<div class="kbox"><h4>Sažetak po vrsti</h4>';
+  Kl.sira.forEach(function(k){
+    var g = Kl.gr[k];
+    h += '<div class="krow"><span class="lbl"><span class="tag ' + k + '">' + k +
+         '</span> &nbsp;' + g.n + ' stavki</span><span class="val">' +
+         bicim(g.neto/10000,2) + ' USD' +
+         (Kl.kurs == null ? '' : ' &nbsp;&middot;&nbsp; <b>' + bicim(g.km/10000,2) + ' ' + Kl.pb + '</b>') +
+         '</span></div>';
+  });
+  h += '<div class="krow"><span class="lbl">bruto</span><span class="val">' +
+       bicim(Kl.brutoT/10000,2) + ' USD</span></div>';
+  h += '<div class="krow"><span class="lbl">popust (cijela faktura)</span><span class="val">-' +
+       bicim(Kl.iskT/10000,2) + ' USD</span></div>';
+  h += '<div class="krow tot"><span class="lbl">KLASA 0 &mdash; ukupno</span><span class="val">' +
+       bicim(Kl.netoT/10000,2) + ' USD' +
+       (Kl.kurs == null ? ' &nbsp;(kurs?)' : ' &nbsp;&middot;&nbsp; ' + bicim(Kl.kmT/10000,2) + ' ' + Kl.pb) +
+       '</span></div></div>';
+  el('klasaOzet').innerHTML = h;
+}
+
+function klasaBaslik(){
+  return 'Klasa 0 · testeri / stalci / moduli · ' + DRZAVA + ' · ' +
+         (S.res.fatura || '') + (S.res.tarih ? ' · ' + S.res.tarih : '');
+}
+
+function klasaHtml(tam){
+  var Kl = klasa0(); if (!Kl) return '';
+  var h = '';
+  if (tam) h += '<meta charset="utf-8"><title>' + esc(klasaBaslik()) + '</title>' +
+    '<style>body{font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;margin:32px;color:#111}' +
+    'h2{font-size:17px;margin:0 0 4px}.s{color:#666;font-size:13px;margin-bottom:18px}' +
+    'table{border-collapse:collapse;font-size:13px;margin-bottom:22px}' +
+    'th,td{border:1px solid #ddd;padding:6px 10px;text-align:left}' +
+    'th{background:#f4f4f4;font-size:11px;text-transform:uppercase}' +
+    'td.n{text-align:right}tr.t td{font-weight:700;background:#fafafa}</style>';
+  h += '<h2>' + esc(klasaBaslik()) + '</h2>';
+  h += '<div class="s">Popust cijele fakture (' + virgul(Kl.iskT) +
+       ' USD) odbijen je od ovih stavki. Roba se knjiži u bruto iznosu.</div>';
+  h += '<table><thead><tr><th>Vrsta</th><th>Stavki</th><th>Bruto USD</th>' +
+       '<th>Neto USD</th><th>Neto ' + Kl.pb + '</th></tr></thead><tbody>';
+  Kl.sira.forEach(function(k){
+    var g = Kl.gr[k];
+    h += '<tr><td>' + k + '</td><td class="n">' + g.n + '</td><td class="n">' +
+         bicim(g.bruto/10000,2) + '</td><td class="n">' + bicim(g.neto/10000,2) + '</td><td class="n">' +
+         (Kl.kurs == null ? '—' : bicim(g.km/10000,2)) + '</td></tr>';
+  });
+  h += '<tr class="t"><td>UKUPNO</td><td class="n">' + Kl.sat.length + '</td><td class="n">' +
+       bicim(Kl.brutoT/10000,2) + '</td><td class="n">' + bicim(Kl.netoT/10000,2) + '</td><td class="n">' +
+       (Kl.kurs == null ? '—' : bicim(Kl.kmT/10000,2)) + '</td></tr></tbody></table>';
+  return h;
+}
+
+function klasaDuz(){
+  var Kl = klasa0(); if (!Kl) return '';
+  var L = [klasaBaslik(), ''];
+  L.push('Popust cijele fakture (' + bicim(Kl.iskT/10000,2) + ' USD) odbijen je od ovih stavki.');
+  L.push('Roba se knjiži u bruto iznosu.');
+  L.push('');
+  var g0 = ['Vrsta', 'Stavki', 'Bruto USD', 'Neto USD', 'Neto ' + Kl.pb];
+  var rows = Kl.sira.map(function(k){
+    var g = Kl.gr[k];
+    return [k, String(g.n), bicim(g.bruto/10000,2), bicim(g.neto/10000,2),
+            Kl.kurs == null ? '-' : bicim(g.km/10000,2)];
+  });
+  rows.push(['UKUPNO', String(Kl.sat.length), bicim(Kl.brutoT/10000,2), bicim(Kl.netoT/10000,2),
+             Kl.kurs == null ? '-' : bicim(Kl.kmT/10000,2)]);
+  var w = [];
+  [g0].concat(rows).forEach(function(r){ r.forEach(function(c, i){ w[i] = Math.max(w[i] || 0, c.length); }); });
+  function f(r){
+    return r.map(function(c, i){
+      return i === 0 ? c + Array(w[i] - c.length + 1).join(' ')
+                     : Array(w[i] - c.length + 1).join(' ') + c;
+    }).join('  ');
+  }
+  L.push(f(g0));
+  L.push(w.map(function(x){ return Array(x + 1).join('-'); }).join('  '));
+  rows.forEach(function(r){ L.push(f(r)); });
+  return L.join('\n') + '\n';
+}
+
+el('bKlasaMail').onclick = function(){
+  var Kl = klasa0(); if (!Kl) return;
+  if (Kl.kurs == null){
+    el('msgs').innerHTML = '<div class="msg warn"><b>Kurs girilmedi.</b> ' +
+      'Klasa 0 tutarı ' + paraAdi() + ' cinsinden hesaplanamıyor — Kalkulacija bölümüne kuru yaz.</div>';
+    return;
+  }
+  var duz = klasaDuz(), zengin = klasaHtml(false);
+  function tamam(){
+    el('bKlasaMail').textContent = 'kopyalandı — maile yapıştır';
+    setTimeout(function(){ el('bKlasaMail').textContent = 'mail için panoya kopyala'; }, 2200);
+  }
+  try {
+    if (typeof ClipboardItem !== 'undefined' && navigator.clipboard.write){
+      navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob([zengin], {type:'text/html'}),
+        'text/plain': new Blob([duz], {type:'text/plain'})
+      })]).then(tamam, function(){ navigator.clipboard.writeText(duz).then(tamam); });
+      return;
+    }
+  } catch (e) {}
+  navigator.clipboard.writeText(duz).then(tamam);
+};
+
+el('bKlasaXlsx').onclick = function(){
+  var Kl = klasa0(); if (!Kl) return;
+  var wb = XLSX.utils.book_new();
+
+  var a1 = [['Vrsta', 'Stavki', 'Bruto USD', 'Neto USD', 'Neto ' + Kl.pb]];
+  Kl.sira.forEach(function(k){
+    var g = Kl.gr[k];
+    a1.push([k, g.n, g.bruto / 10000, g.neto / 10000,
+             Kl.kurs == null ? null : g.km / 10000]);
+  });
+  a1.push(['UKUPNO', Kl.sat.length, Kl.brutoT / 10000, Kl.netoT / 10000,
+           Kl.kurs == null ? null : Kl.kmT / 10000]);
+  var w1 = XLSX.utils.aoa_to_sheet(a1);
+  w1['!cols'] = [{wch:14},{wch:8},{wch:13},{wch:13},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, w1, 'Klasa 0');
+
+  var a2 = [['Barkod', 'Stock code', 'Vrsta', 'Naziv', 'Količina',
+             'Bruto USD', 'Neto USD', 'Neto ' + Kl.pb]];
+  Kl.sat.forEach(function(x, i){
+    a2.push([x.barkod, x.kod, x.sinif, x.isim, x.adet, x.tutar / 10000,
+             Kl.neto[i] / 10000, Kl.kurs == null ? null : Kl.km[i] / 10000]);
+  });
+  var w2 = XLSX.utils.aoa_to_sheet(a2);
+  var rng = XLSX.utils.decode_range(w2['!ref']);
+  for (var r = 1; r <= rng.e.r; r++){
+    var a = XLSX.utils.encode_cell({c:0, r:r});
+    if (w2[a]){ w2[a].t = 's'; w2[a].v = String(w2[a].v); }
+    [5, 6, 7].forEach(function(c){
+      var k2 = XLSX.utils.encode_cell({c:c, r:r});
+      if (w2[k2] && w2[k2].v != null) w2[k2].z = '#,##0.00';
+    });
+  }
+  w2['!cols'] = [{wch:15},{wch:16},{wch:11},{wch:46},{wch:9},{wch:12},{wch:12},{wch:13}];
+  w2['!autofilter'] = {ref: w2['!ref']};
+  w2['!freeze'] = {xSplit:0, ySplit:1};
+  XLSX.utils.book_append_sheet(wb, w2, 'Stavke');
+
+  var buf = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+  var blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  var a3 = document.createElement('a');
+  a3.href = URL.createObjectURL(blob);
+  a3.download = 'klasa0_' + DRZAVA + '_' + stem() + '.xlsx';
+  document.body.appendChild(a3); a3.click();
+  setTimeout(function(){ URL.revokeObjectURL(a3.href); a3.remove(); }, 800);
+};
 
 el('bListeSec').onclick = function(){ el('listeFile').click(); };
 el('listeFile').onchange = function(){
