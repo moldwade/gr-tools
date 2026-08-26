@@ -113,7 +113,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
   <h1>Uvoz Robe</h1>
   <div class="divider"></div>
   <div class="sub">Fabrika sevkiyat Excel'i → Robno / 4Dwand uvoz
-    <span class="ver">&middot; v1.4 &middot; 2026-08-26</span></div>
+    <span class="ver">&middot; v1.5 &middot; 2026-08-26</span></div>
   <div class="drz" id="drzava">
     <button data-d="BiH" class="on">BiH &middot; Robno</button>
     <button data-d="HR">HR &middot; 4Dwand</button>
@@ -151,7 +151,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
     <div class="sec-t">İndir</div>
     <div class="btns">
       <button class="primary" id="bUvoz">uvoz.csv &nbsp;<small id="bUvozAlt">5 kolon</small></button>
-      <button id="bYeni">yeni_artikli.csv</button>
+      <button id="bYeni">yeni_artikli.xlsx</button>
       <button id="bAtil">atilanlar.csv</button>
       <button id="bKopya">uvoz'u panoya kopyala</button>
     </div>
@@ -281,7 +281,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
   5. kolon robno'nun <b>Cijena</b> alanıdır, kolon silme.<br>
   <b>uvoz · HR</b> — <code>barkod;adet;tutar EUR</code>, ×10000 yok, panoya kopyala.<br>
   Barkod havuzunu tazelemek için: <code>../analiza-pj/.venv/bin/python uvoz.py --tazele</code><br>
-  <span class="ver">uvoz v1.4 &middot; üretim 2026-08-26</span>
+  <span class="ver">uvoz v1.5 &middot; üretim 2026-08-26</span>
 </div>
 
 </div>
@@ -358,7 +358,7 @@ var K = {
   "adet",
   "tutar"
  ],
- "SURUM": "1.4",
+ "SURUM": "1.5",
  "DEFTER_KOLON": [
   "fatura_no",
   "fatura_tarih",
@@ -849,9 +849,48 @@ function kursYok(){
 }
 el('bUvoz').onclick  = function(){ if (kursYok()) return;
   indir(stem()+'_uvoz.csv', csvMetin(uvozSatirlari())); };
-el('bYeni').onclick  = function(){ indir(stem()+'_yeni_artikli.csv',
-  csvMetin([['barkod','stock_code','isim','grup','adet','tutar','birim_fiyat']].concat(
-    S.yeni.map(function(s){ return [s.barkod, s.kod, s.isim, s.grup, s.adet, virgul(s.tutar), virgul(s.bfiyat)]; }))), true); };
+/* Elle girmek icin aciliyor - barkod METIN olmali, yoksa Excel
+   8691190591250'yi 8,69119E+12 yapar. */
+function yeniXlsx(){
+  var pb = hr() ? 'EUR' : 'USD';
+  var bas = ['Barkod', 'Stock code', 'Naziv', 'Grupa', 'Količina',
+             'Cijena/kom (' + pb + ')', 'Ukupno (' + pb + ')'];
+  var aoa = [bas];
+  S.yeni.forEach(function(x){
+    var t = hr() ? satirTutar(x) : x.tutar;
+    var bf = (hr() && t != null && x.adet) ? Math.round(t / x.adet) : x.bfiyat;
+    aoa.push([x.barkod, x.kod, x.isim, x.grup, x.adet,
+              (bf || 0) / 10000, t == null ? null : t / 10000]);
+  });
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  var son = XLSX.utils.decode_range(ws['!ref']);
+  for (var r = 1; r <= son.e.r; r++){
+    var a = XLSX.utils.encode_cell({c:0, r:r});
+    if (ws[a]){ ws[a].t = 's'; ws[a].v = String(ws[a].v); ws[a].z = '@'; }
+    [5, 6].forEach(function(c){
+      var k = XLSX.utils.encode_cell({c:c, r:r});
+      if (ws[k] && ws[k].v != null) ws[k].z = '#,##0.00';
+    });
+  }
+  ws['!cols'] = [{wch:15},{wch:14},{wch:48},{wch:22},{wch:9},{wch:15},{wch:14}];
+  ws['!autofilter'] = {ref: ws['!ref']};
+  ws['!freeze'] = {xSplit:0, ySplit:1};
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Nove artikle');
+  return wb;
+}
+
+el('bYeni').onclick = function(){
+  if (!S || !S.yeni.length) return;
+  if (hr() && kursYok()) return;
+  var buf = XLSX.write(yeniXlsx(), {bookType:'xlsx', type:'array'});
+  var blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'nove-artikle_' + DRZAVA + '_' + stem() + '.xlsx';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 800);
+};
 el('bAtil').onclick  = function(){ indir(stem()+'_atilanlar.csv',
   csvMetin([['sinif','barkod','stock_code','isim','grup','adet','tutar','birim_fiyat']].concat(
     S.atil.map(function(s){ return [s.sinif, s.barkod, s.kod, s.isim, s.grup, s.adet, virgul(s.tutar), virgul(s.bfiyat)]; }))), true); };
