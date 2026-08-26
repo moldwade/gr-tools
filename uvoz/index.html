@@ -238,7 +238,15 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
   </div>
 
   <div class="sec" id="yeniSec">
-    <div class="sec-t">Robno'da elle açılacaklar</div>
+    <div class="sec-t">Yeni ürünler &mdash; sistemde yok</div>
+    <div class="btns" style="margin-bottom:12px;align-items:center">
+      <button id="bYeniMail">mail i&ccedil;in panoya kopyala</button>
+      <button id="bYeniHtml">liste indir (.html)</button>
+      <label style="font-size:12.5px;color:#888;display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="cYeniFiyat" style="display:inline;width:auto">
+        fiyatlar&#305; da ekle
+      </label>
+    </div>
     <div class="scroll"><table id="tYeni"></table></div>
   </div>
 
@@ -350,7 +358,7 @@ var K = {
   "kaynak_dosya"
  ]
 };
-var HAVUZ_SAYI = 0, HAVUZ_TARIH = "2026-08-25",
+var HAVUZ_SAYI = 0, HAVUZ_TARIH = "2026-08-26",
     HAVUZ_YIL = "2026", HAVUZ_KAYNAK = "";
 var BOM = String.fromCharCode(0xFEFF);
 
@@ -642,8 +650,10 @@ function goster(res, dosyaAdi){
     ' ürünün barkodu robno\'da yok.</b> Bunlar uvoz.csv\'ye girmedi - önce robno\'da elle aç, sonra <code>uvoz.py --arac</code> ile listeyi tazele.</div>');
   el('msgs').innerHTML = m.join('');
 
-  tabloYaz(el('tYeni'), ['Barkod','Stock code','Isim','Adet','Tutar'],
-    yeni.map(function(s){ return [s.barkod, s.kod, s.isim, s.adet, virgul(s.tutar)]; }));
+  tabloYaz(el('tYeni'), ['Barkod','Stock code','Isim','Adet','Tutar ' + (hr() ? 'EUR' : 'USD')],
+    yeni.map(function(s){
+      var t = hr() ? satirTutar(s) : s.tutar;
+      return [s.barkod, s.kod, s.isim, s.adet, t == null ? '—' : virgul(t)]; }));
   el('yeniSec').className = yeni.length ? 'sec' : 'sec hide';
 
   var dagilim = {};
@@ -1094,6 +1104,106 @@ el('bKalkDefter').onclick = function(){
   el('kalkDefterBilgi').textContent = d.satir.length + ' kayıt indirildi (' +
     d.ekle + ' yeni) — defter/kalkulacije.csv üzerine kaydet';
 };
+
+/* ---- Yeni urunler: pazarlamaya gonderilecek liste ----
+   Hem BiH hem HR modunda calisir; S.yeni iki tarafta da ayni kuralla dolar.
+   Fiyat varsayilan olarak YOK - alis fiyati ic bilgi; kutucukla eklenir. */
+function yeniListe(){
+  var fiyat = el('cYeniFiyat').checked;
+  var pb = hr() ? 'EUR' : 'USD';
+  var bas = ['Naziv', 'Šifra', 'Barkod', 'Količina'];
+  if (fiyat) bas = bas.concat(['Cijena/kom (' + pb + ')', 'Ukupno (' + pb + ')']);
+  var sat = S.yeni.map(function(x){
+    var t = hr() ? satirTutar(x) : x.tutar, bf = x.bfiyat;
+    if (hr() && t != null && x.adet)
+      bf = Math.round(t / x.adet);
+    var r = [x.isim, x.kod, x.barkod, String(x.adet)];
+    /* mail listesinde para hep 2 ondalik (virgul() sondaki sifirlari atiyor) */
+    if (fiyat) r = r.concat([bicim((bf || 0) / 10000, 2),
+                             t == null ? '' : bicim(t / 10000, 2)]);
+    return r;
+  });
+  return {bas: bas, sat: sat, fiyat: fiyat, pb: pb};
+}
+
+function yeniBaslik(){
+  return 'Nove artikle · ' + DRZAVA + ' · ' + (S.res.fatura || '') +
+         (S.res.tarih ? ' · ' + S.res.tarih : '');
+}
+
+function yeniHtml(tam){
+  var L = yeniListe();
+  var h = '';
+  if (tam) h += '<meta charset="utf-8"><title>' + esc(yeniBaslik()) + '</title>' +
+    '<style>body{font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;' +
+    'margin:32px;color:#111}h2{font-size:17px;margin:0 0 4px}' +
+    '.s{color:#666;font-size:13px;margin-bottom:18px}' +
+    'table{border-collapse:collapse;font-size:13px}' +
+    'th,td{border:1px solid #ddd;padding:6px 10px;text-align:left}' +
+    'th{background:#f4f4f4;font-size:11px;letter-spacing:.5px;text-transform:uppercase}' +
+    'td.n{text-align:right}</style>';
+  h += '<h2>' + esc(yeniBaslik()) + '</h2>';
+  h += '<div class="s">' + L.sat.length + ' artikala koji još nisu u sistemu</div>';
+  h += '<table><thead><tr>' + L.bas.map(function(b){ return '<th>' + esc(b) + '</th>'; }).join('') +
+       '</tr></thead><tbody>';
+  h += L.sat.map(function(r){
+    return '<tr>' + r.map(function(c, i){
+      return '<td' + (i >= 3 ? ' class="n"' : '') + '>' + esc(c) + '</td>';
+    }).join('') + '</tr>';
+  }).join('') + '</tbody></table>';
+  return h;
+}
+
+function yeniDuz(){
+  var L = yeniListe();
+  var g = [];
+  L.bas.forEach(function(b, i){ g[i] = b.length; });
+  L.sat.forEach(function(r){ r.forEach(function(c, i){ g[i] = Math.max(g[i] || 0, String(c).length); }); });
+  function sat(r){
+    return r.map(function(c, i){
+      c = String(c);
+      return i >= 3 ? Array(g[i] - c.length + 1).join(' ') + c
+                    : c + Array(g[i] - c.length + 1).join(' ');
+    }).join('  ').replace(/\s+$/, '');
+  }
+  var cizgi = g.map(function(w){ return Array(w + 1).join('-'); }).join('  ');
+  return yeniBaslik() + '\n' + L.sat.length + ' artikala koji još nisu u sistemu\n\n' +
+         sat(L.bas) + '\n' + cizgi + '\n' + L.sat.map(sat).join('\n') + '\n';
+}
+
+el('bYeniMail').onclick = function(){
+  if (!S || !S.yeni.length) return;
+  if (hr() && kursYok() && el('cYeniFiyat').checked) return;
+  var duz = yeniDuz(), zengin = yeniHtml(false);
+  function tamam(){
+    el('bYeniMail').textContent = 'kopyalandı — maile yapıştır';
+    setTimeout(function(){ el('bYeniMail').textContent = 'mail için panoya kopyala'; }, 2200);
+  }
+  /* zengin + duz birlikte: Gmail'e tablo, duz metne liste olarak yapisir */
+  try {
+    if (typeof ClipboardItem !== 'undefined' && navigator.clipboard.write){
+      navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob([zengin], {type:'text/html'}),
+        'text/plain': new Blob([duz], {type:'text/plain'})
+      })]).then(tamam, function(){ navigator.clipboard.writeText(duz).then(tamam); });
+      return;
+    }
+  } catch (e) {}
+  navigator.clipboard.writeText(duz).then(tamam);
+};
+
+el('bYeniHtml').onclick = function(){
+  if (!S || !S.yeni.length) return;
+  if (hr() && kursYok() && el('cYeniFiyat').checked) return;
+  var ad = 'nove-artikle_' + DRZAVA + '_' + stem() + '.html';
+  var blob = new Blob([yeniHtml(true)], {type:'text/html;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = ad;
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 800);
+};
+
+el('cYeniFiyat').addEventListener('change', function(){ if (S) goster(S.res, S.dosya); });
 
 el('bListeSec').onclick = function(){ el('listeFile').click(); };
 el('listeFile').onchange = function(){
