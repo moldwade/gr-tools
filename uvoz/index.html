@@ -937,8 +937,16 @@ function pdfDeklaracijaUygula(d, f){
 }
 
 function pdfSpedicijaUygula(d, f){
+  /* Spedicija bez PDV-a = usluge + PROLAZNE STAVKE, yani faturanin
+     "SVEUKUPNO I. + II." satirindaki Iznos kolonu (60,00 + 38,49 = 98,49).
+     Prolazne stavke PDV'siz gecen masraflar (Cl.33 St.3) ama zavisni
+     troskovun gercek parcasi - Tugay 10 yildir bu toplami baz aliyor.
+     Capraz kontrole GIRMEZ (o yalniz carina+transport+ostalo kullanir),
+     dolayisiyla buraya yazmak hicbir kontrolu bozmaz. */
   var n = 0;
-  n += pdfAlanYaz('iSpb', d.bez) ? 1 : 0;
+  d.spbTop = (d.bez == null && d.prolazne == null)
+               ? null : Math.round(((d.bez||0) + (d.prolazne||0)) * 100) / 100;
+  n += pdfAlanYaz('iSpb', d.spbTop) ? 1 : 0;
   n += pdfAlanYaz('iSpp', d.pdv) ? 1 : 0;
 
   var h = '<div class="msg ' + (d.tutarli === false ? 'err' : 'ok') + '">' +
@@ -947,12 +955,15 @@ function pdfSpedicijaUygula(d, f){
     (d.dosp ? ' &middot; dospijeće ' + esc(d.dosp) : '') +
     '<table class="pdft">' +
     pdfSatirGoster('Usluge bez PDV-a', d.bez, 'EUR') +
-    pdfSatirGoster('PDV', d.pdv, 'EUR') +
     pdfSatirGoster('Prolazne stavke', d.prolazne, 'EUR') +
+    pdfSatirGoster('→ Špedicija bez PDV-a', d.spbTop, 'EUR') +
+    pdfSatirGoster('PDV', d.pdv, 'EUR') +
     pdfSatirGoster('Sveukupno', d.ukupno, 'EUR') +
     '</table>' +
-    (d.prolazne ? '<b>Prolazne stavke (' + bicim(d.prolazne) + ' EUR) NISU upisane</b> ' +
-      '&mdash; nisu u PDV osnovici (Čl.33 St.3). Ako ih vodiš kao zavisni trošak, dodaj ručno.<br>' : '') +
+    (d.prolazne ? '<b>Špedicija bez PDV-a ' + bicim(d.spbTop) + ' EUR</b> = usluge ' +
+      bicim(d.bez||0) + ' + prolazne stavke ' + bicim(d.prolazne) +
+      ' &mdash; to je stupac <i>Iznos</i> u retku SVEUKUPNO I. + II. ' +
+      'Prolazne stavke nemaju PDV (Čl.33 St.3) ali jesu zavisni trošak.<br>' : '') +
     '<i>' + n + ' polja popunjeno.</i></div>';
   el('msgs').innerHTML = h;
   kalkCiz();
