@@ -99,7 +99,8 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
   border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.35);color:#fff}
 .kin:focus{outline:none;border-color:rgba(200,51,58,.7);background:rgba(0,0,0,.55)}
 .kin.bos{border-color:rgba(255,190,0,.45)}
-.kbad{color:#e0574a}\n.pdft{width:100%;border-collapse:collapse;margin:8px 0;font-size:12px}\n.pdft td{padding:3px 6px;border-bottom:1px solid rgba(255,255,255,.07)}\n.pdft td.pv{text-align:right;font-variant-numeric:tabular-nums}
+.kbad{color:#e0574a}
+.kdim{color:#777}\n.pdft{width:100%;border-collapse:collapse;margin:8px 0;font-size:12px}\n.pdft td{padding:3px 6px;border-bottom:1px solid rgba(255,255,255,.07)}\n.pdft td.pv{text-align:right;font-variant-numeric:tabular-nums}
 .khint{font-size:10.5px;color:#666;margin-top:-2px;padding-bottom:6px}
 .kecho{font-size:11px;color:#7a7a7a;min-width:96px;text-align:right;
   font-variant-numeric:tabular-nums}
@@ -888,10 +889,18 @@ function pdfDeklaracijaUygula(d, f){
   n += pdfAlanYaz('iCarina', d.carina)   ? 1 : 0;
   n += pdfAlanYaz('iPdv',    d.pdv)      ? 1 : 0;
   n += pdfAlanYaz('iPdvSt',  d.pdvStopa, 0) ? 1 : 0;
-  /* AK ve CA'yi Transport/Ostalo'ya koymak PDV osnovicasi ozdesligini
-     kapatir:  mal/tecaj + AK + CA = PDV osnovicasi  (olculdu, 0,00 fark) */
-  n += pdfAlanYaz('iTra', d.ak) ? 1 : 0;
-  n += pdfAlanYaz('iOst', d.ca) ? 1 : 0;
+  /* AK ve CA ayni transport faturasinin IKI PARCASI:
+       AK = sinira kadar   -> carinska vrijednost'a girer
+       CA = giris sonrasi  -> yalniz PDV osnovicasina girer
+     U/26-21462'de 600 + 200 = 800 EUR = prevoznik faturasinin tamami.
+     Transport'a sadece AK yazmak defteri yaniltir (600 gorunur, gercek
+     800).  Toplami yaz, kirilimi raporda goster.  Ozdeslik yine kapanir:
+       mal/tecaj + (AK+CA) = PDV osnovicasi   (olculdu, 0,00 fark) */
+  d.traTop = (d.ak == null && d.ca == null) ? null : (d.ak || 0) + (d.ca || 0);
+  n += pdfAlanYaz('iTra', d.traTop) ? 1 : 0;
+  /* Ostalo 0 yazilir, bos BIRAKILMAZ: capraz kontrol o alan null iken hic
+     kosmuyor.  Baska masraf varsa uzerine yazilir. */
+  if (d.traTop != null) n += pdfAlanYaz('iOst', 0) ? 1 : 0;
 
   var h = '<div class="msg ' + (d.tutarli === false ? 'err' : 'ok') + '">' +
     '<b>Carinska deklaracija pročitana</b> &mdash; ' + esc(f.name) +
@@ -900,8 +909,9 @@ function pdfDeklaracijaUygula(d, f){
     '<table class="pdft">' +
     pdfSatirGoster('Ukupna vrijednost', d.usd, 'USD') +
     pdfSatirGoster('Tečaj (1 EUR = ? USD)', d.tecaj, '', 6) +
-    pdfSatirGoster('Uvećanje AK', d.ak, 'EUR') +
-    pdfSatirGoster('Uvećanje CA', d.ca, 'EUR') +
+    pdfSatirGoster('Uvećanje AK (do granice)', d.ak, 'EUR') +
+    pdfSatirGoster('Uvećanje CA (nakon ulaska)', d.ca, 'EUR') +
+    pdfSatirGoster('AK + CA → Transport', d.traTop, 'EUR') +
     pdfSatirGoster('Carinska/statistička vrij.', d.stat, 'EUR') +
     pdfSatirGoster('Carina (A00)', d.carina, 'EUR') +
     pdfSatirGoster('PDV osnovica (B00)', d.pdvOsn, 'EUR') +
@@ -915,7 +925,13 @@ function pdfDeklaracijaUygula(d, f){
           bicim(d.hesOsn) + '</b> = PDV osnovica &mdash; slaže se.'
         : '<b class="kbad">Provjera ne prolazi:</b> izračunato ' + bicim(d.hesOsn) +
           ', na papiru ' + bicim(d.pdvOsn) + '. Provjeri brojeve ručno.')) +
-    '<br><i>' + n + ' polja popunjeno &mdash; provjeri pa ispravi ako treba.</i></div>';
+    (d.traTop == null ? '' :
+      '<br><b>Transport ' + bicim(d.traTop) + ' EUR</b> = AK ' + bicim(d.ak||0) +
+      ' + CA ' + bicim(d.ca||0) + ' &mdash; usporedi s računom prijevoznika. ' +
+      'Špediter dijeli isti račun: do granice ulazi u carinsku vrijednost, ' +
+      'ostatak samo u PDV osnovicu.') +
+    '<br><i>' + n + ' polja popunjeno &mdash; provjeri pa ispravi ako treba. ' +
+    'Ostalo je postavljeno na 0 &mdash; dopuni ako ima drugih troškova.</i></div>';
   el('msgs').innerHTML = h;
   kalkCiz();
 }
@@ -1254,10 +1270,16 @@ function kalkCiz(){
     ke.innerHTML = '<b class="kbad">Tečaj manji od 1 &mdash; možda obrnuti smjer.</b> ' +
       (hr() ? 'Deklaracija daje <b>1 EUR = ? USD</b> (npr. 1,140800).'
             : 'Polje 23 daje <b>KM po USD</b> (npr. 1,676809).');
-  } else if (tum != null){
-    ke.innerHTML = bicim(tum) + ' USD ' + (hr() ? '&divide;' : '&times;') + ' ' +
-      bicim(kurs, 6) + ' = <b>' + bicim(kurCevir(tum, kurs)) + ' ' + PB + '</b>';
-  } else ke.innerHTML = '';
+  } else {
+    /* EXW'yi goster, SUB TOTAL'i degil: HR deklarasyonunun kendi satiri
+       "Vrijednost robe: 70.197,54 USD (1:1,140800) = 61.533,61 EUR" boyle
+       kuruluyor - echo onu birebir tekrarlarsa kur dogrulamasi gozle yapilir. */
+    var kb = (exw != null) ? exw : tum;
+    ke.innerHTML = (kb == null) ? '' :
+      bicim(kb) + ' USD ' + (hr() ? '&divide;' : '&times;') + ' ' +
+      bicim(kurs, 6) + ' = <b>' + bicim(kurCevir(kb, kurs)) + ' ' + PB + '</b>' +
+      (exw != null ? ' <span class="kdim">(EXW)</span>' : '');
+  }
   el('rIznos').textContent = iznos == null ? '\u2014' : bicim(iznos) + ' ' + PB;
   el('rPdv').textContent   = o.Pdv == null ? '\u2014' : bicim(o.Pdv) + ' ' + PB;
   el('rTot').textContent   = (iznos == null || o.Pdv == null) ? '\u2014' : bicim(iznos + o.Pdv) + ' ' + PB;
