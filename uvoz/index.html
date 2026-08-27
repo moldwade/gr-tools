@@ -99,6 +99,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
   border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.35);color:#fff}
 .kin:focus{outline:none;border-color:rgba(200,51,58,.7);background:rgba(0,0,0,.55)}
 .kin.bos{border-color:rgba(255,190,0,.45)}
+.kbad{color:#e0574a}\n.pdft{width:100%;border-collapse:collapse;margin:8px 0;font-size:12px}\n.pdft td{padding:3px 6px;border-bottom:1px solid rgba(255,255,255,.07)}\n.pdft td.pv{text-align:right;font-variant-numeric:tabular-nums}
 .khint{font-size:10.5px;color:#666;margin-top:-2px;padding-bottom:6px}
 .kecho{font-size:11px;color:#7a7a7a;min-width:96px;text-align:right;
   font-variant-numeric:tabular-nums}
@@ -113,7 +114,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
   <h1>Uvoz Robe</h1>
   <div class="divider"></div>
   <div class="sub">Fabrika sevkiyat Excel'i → Robno / 4Dwand uvoz
-    <span class="ver">&middot; v1.6 &middot; 2026-08-26</span></div>
+    <span class="ver">&middot; v1.7 &middot; 2026-08-27</span></div>
   <div class="drz" id="drzava">
     <button data-d="BiH" class="on">BiH &middot; Robno</button>
     <button data-d="HR">HR &middot; 4Dwand</button>
@@ -132,9 +133,10 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
 <div class="drop" id="drop">
   <b>Dosyayı buraya sürükle</b>
   <span>fabrika Excel'i (.xlsx / .xls) &middot; barkodi.csv &middot; testeri.csv<br>
+  <b id="dropPdf">HR: carinska deklaracija &middot; račun špeditera (.pdf)</b><br>
   hangisi olduğunu kendi anlar — ya da tıklayıp seç</span>
 </div>
-<input type="file" id="file" accept=".xlsx,.xls,.xlsm,.csv">
+<input type="file" id="file" accept=".xlsx,.xls,.xlsm,.csv,.pdf">
 
 <div id="out" class="hide">
 
@@ -174,6 +176,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
         <div class="krow"><span class="lbl">Kurs</span>
           <span class="kecho" id="eKurs"></span><input class="kin" id="iKurs" inputmode="decimal" placeholder="1,676809"></div>
         <div class="khint" id="kursHint">carinska deklaracija, polje 23</div>
+        <div class="khint" id="kursEcho"></div>
         <div class="krow"><span class="lbl">Carina</span>
           <span class="kecho" id="eCarina"></span><input class="kin" id="iCarina" inputmode="decimal" placeholder="0,00"></div>
         <div class="khint">ASYCUDA, tax 001</div>
@@ -290,13 +293,14 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;colo
   5. kolon robno'nun <b>Cijena</b> alanıdır, kolon silme.<br>
   <b>uvoz · HR</b> — <code>barkod;adet;tutar EUR</code>, ×10000 yok, panoya kopyala.<br>
   Barkod havuzunu tazelemek için: <code>../analiza-pj/.venv/bin/python uvoz.py --tazele</code><br>
-  <span class="ver">uvoz v1.6 &middot; üretim 2026-08-26</span>
+  <span class="ver">uvoz v1.7 &middot; üretim 2026-08-27</span>
 </div>
 
 </div>
 
 <script type="text/plain" id="havuzData"></script>
 <script src="vendor/xlsx.full.min.js"></script>
+<script src="vendor/pdf.min.js"></script>
 <script>
 /* ---- uvoz.py --arac ile uretildi; kurallar uvoz.py'de degisir ---- */
 var K = {
@@ -367,7 +371,7 @@ var K = {
   "adet",
   "tutar"
  ],
- "SURUM": "1.6",
+ "SURUM": "1.7",
  "DEFTER_KOLON": [
   "fatura_no",
   "fatura_tarih",
@@ -381,7 +385,7 @@ var K = {
   "kaynak_dosya"
  ]
 };
-var HAVUZ_SAYI = 0, HAVUZ_TARIH = "2026-08-26",
+var HAVUZ_SAYI = 0, HAVUZ_TARIH = "2026-08-27",
     HAVUZ_YIL = "2026", HAVUZ_KAYNAK = "";
 var BOM = String.fromCharCode(0xFEFF);
 
@@ -772,6 +776,7 @@ function wandListesi(wb){
 }
 
 function dosyaYonlendir(f){
+  if (/\.pdf$/i.test(f.name || '')) { pdfOku(f); return; }
   if (/\.(xlsx|xlsm|xls)$/i.test(f.name || '')) {
     var rd0 = new FileReader();
     rd0.onload = function(e){
@@ -806,10 +811,135 @@ function dosyaYonlendir(f){
     else {
       el('out').classList.remove('hide');
       el('msgs').innerHTML = '<div class="msg err"><b>Tanınmadı:</b> ' + esc(f.name) +
-        ' &mdash; fabrika Excel\'i (.xlsx/.xls), barkodi.csv ya da testeri.csv bekleniyor.</div>';
+        ' &mdash; fabrika Excel\'i (.xlsx/.xls), barkodi.csv, testeri.csv ' +
+        'ya da (HR) carinska deklaracija / špedicija PDF-a bekleniyor.</div>';
     }
   };
   rd.readAsText(f, 'utf-8');
+}
+
+/* PDF'ten okunan degeri alana yaz.  Alan KILITLENMEZ - uzerine
+   yazabilirsin; amac yazmani ortadan kaldirmak degil, dogrulatmak. */
+function pdfAlanYaz(id, v, ond){
+  if (v == null) return false;
+  var e = el(id); if (!e) return false;
+  e.value = bicim(v, ond == null ? 2 : ond);
+  return true;
+}
+
+function pdfSatirGoster(et, v, birim, ond){
+  return '<tr><td>' + et + '</td><td class="pv">' +
+    (v == null ? '<span class="kbad">nije nađeno</span>'
+               : '<b>' + bicim(v, ond == null ? 2 : ond) + '</b> ' + (birim||'')) +
+    '</td></tr>';
+}
+
+function pdfOku(f){
+  if (typeof pdfjsLib === 'undefined'){
+    el('out').classList.remove('hide');
+    el('msgs').innerHTML = '<div class="msg err"><b>pdf.min.js nije učitan.</b> ' +
+      'Datoteka <code>vendor/pdf.min.js</code> mora stajati uz alat.</div>';
+    return;
+  }
+  var rd = new FileReader();
+  rd.onload = function(ev){
+    pdfjsLib.getDocument({data: new Uint8Array(ev.target.result)}).promise
+      .then(function(doc){
+        var isler = [];
+        for (var i = 1; i <= doc.numPages; i++)
+          isler.push(doc.getPage(i).then(function(pg){ return pg.getTextContent(); }));
+        return Promise.all(isler);
+      })
+      .then(function(sayfalar){
+        var sat = [];
+        sayfalar.forEach(function(tc){ sat = sat.concat(pdfSatirlar(tc, 2.5)); });
+        var t = sat.join('\n');
+        el('out').classList.remove('hide');
+
+        /* Metin katmani yok = tarama.  Bosna'nin belgeleri boyle. */
+        if (t.replace(/\s/g,'').length < 80){
+          el('msgs').innerHTML = '<div class="msg warn"><b>' + esc(f.name) +
+            '</b> &mdash; ovaj PDF je <b>skenirani dokument</b>, nema sloja teksta. ' +
+            'Brojeve upiši ručno.</div>';
+          return;
+        }
+
+        var dek = /Obra[cč]un davanja|Ukupna vrijednost|DEKLARACIJA/i.test(t);
+        var spe = /Ra[cč]un br\.|UKUPNO USLUGE|PROLAZNE STAVKE/i.test(t);
+        if (dek)      pdfDeklaracijaUygula(okuDeklaracija(t), f);
+        else if (spe) pdfSpedicijaUygula(okuSpedicija(t), f);
+        else el('msgs').innerHTML = '<div class="msg err"><b>Nije prepoznato:</b> ' +
+               esc(f.name) + ' &mdash; očekujem carinsku deklaraciju ili račun špeditera.</div>';
+      })
+      .catch(function(err){
+        el('out').classList.remove('hide');
+        el('msgs').innerHTML = '<div class="msg err"><b>PDF se ne može čitati:</b> ' +
+          esc(err && err.message || String(err)) +
+          '<br>Ako si otvorio alat dvoklikom (file://), probaj preko ' +
+          '<code>tools.goldenrose.ba/uvoz</code> &mdash; čitanje PDF-a traži worker.</div>';
+      });
+  };
+  rd.readAsArrayBuffer(f);
+}
+
+function pdfDeklaracijaUygula(d, f){
+  var n = 0;
+  n += pdfAlanYaz('iKurs',  d.tecaj, 6)  ? 1 : 0;
+  n += pdfAlanYaz('iCarina', d.carina)   ? 1 : 0;
+  n += pdfAlanYaz('iPdv',    d.pdv)      ? 1 : 0;
+  n += pdfAlanYaz('iPdvSt',  d.pdvStopa, 0) ? 1 : 0;
+  /* AK ve CA'yi Transport/Ostalo'ya koymak PDV osnovicasi ozdesligini
+     kapatir:  mal/tecaj + AK + CA = PDV osnovicasi  (olculdu, 0,00 fark) */
+  n += pdfAlanYaz('iTra', d.ak) ? 1 : 0;
+  n += pdfAlanYaz('iOst', d.ca) ? 1 : 0;
+
+  var h = '<div class="msg ' + (d.tutarli === false ? 'err' : 'ok') + '">' +
+    '<b>Carinska deklaracija pročitana</b> &mdash; ' + esc(f.name) +
+    (d.mrn ? '<br>MRN <code>' + esc(d.mrn) + '</code>' : '') +
+    (d.ref ? ' &middot; <code>' + esc(d.ref) + '</code>' : '') +
+    '<table class="pdft">' +
+    pdfSatirGoster('Ukupna vrijednost', d.usd, 'USD') +
+    pdfSatirGoster('Tečaj (1 EUR = ? USD)', d.tecaj, '', 6) +
+    pdfSatirGoster('Uvećanje AK', d.ak, 'EUR') +
+    pdfSatirGoster('Uvećanje CA', d.ca, 'EUR') +
+    pdfSatirGoster('Carinska/statistička vrij.', d.stat, 'EUR') +
+    pdfSatirGoster('Carina (A00)', d.carina, 'EUR') +
+    pdfSatirGoster('PDV osnovica (B00)', d.pdvOsn, 'EUR') +
+    pdfSatirGoster('PDV stopa', d.pdvStopa, '%', 0) +
+    pdfSatirGoster('PDV (B00)', d.pdv, 'EUR') +
+    '</table>' +
+    (d.tutarli == null ? '' :
+      (d.tutarli
+        ? 'Provjera: <b>' + bicim(d.usd) + ' &divide; ' + bicim(d.tecaj,6) +
+          ' + ' + bicim(d.ak||0) + ' + ' + bicim(d.ca||0) + ' = ' +
+          bicim(d.hesOsn) + '</b> = PDV osnovica &mdash; slaže se.'
+        : '<b class="kbad">Provjera ne prolazi:</b> izračunato ' + bicim(d.hesOsn) +
+          ', na papiru ' + bicim(d.pdvOsn) + '. Provjeri brojeve ručno.')) +
+    '<br><i>' + n + ' polja popunjeno &mdash; provjeri pa ispravi ako treba.</i></div>';
+  el('msgs').innerHTML = h;
+  kalkCiz();
+}
+
+function pdfSpedicijaUygula(d, f){
+  var n = 0;
+  n += pdfAlanYaz('iSpb', d.bez) ? 1 : 0;
+  n += pdfAlanYaz('iSpp', d.pdv) ? 1 : 0;
+
+  var h = '<div class="msg ' + (d.tutarli === false ? 'err' : 'ok') + '">' +
+    '<b>Račun špeditera pročitan</b> &mdash; ' + esc(f.name) +
+    (d.broj ? '<br>Račun <code>' + esc(d.broj) + '</code>' : '') +
+    (d.dosp ? ' &middot; dospijeće ' + esc(d.dosp) : '') +
+    '<table class="pdft">' +
+    pdfSatirGoster('Usluge bez PDV-a', d.bez, 'EUR') +
+    pdfSatirGoster('PDV', d.pdv, 'EUR') +
+    pdfSatirGoster('Prolazne stavke', d.prolazne, 'EUR') +
+    pdfSatirGoster('Sveukupno', d.ukupno, 'EUR') +
+    '</table>' +
+    (d.prolazne ? '<b>Prolazne stavke (' + bicim(d.prolazne) + ' EUR) NISU upisane</b> ' +
+      '&mdash; nisu u PDV osnovici (Čl.33 St.3). Ako ih vodiš kao zavisni trošak, dodaj ručno.<br>' : '') +
+    '<i>' + n + ' polja popunjeno.</i></div>';
+  el('msgs').innerHTML = h;
+  kalkCiz();
 }
 
 function yukleWb(wb, ad){
@@ -944,14 +1074,116 @@ function bicim(v, ond){
 
 var KALK = ['Kurs','Carina','Pdv','Tra','Spb','Spp','Ost','ExwMan','PdvSt'];
 
-/* HR: satir tutari kurs ile USD->EUR cevrilir (1/10000 tam sayi biriminde).
-   BiH: cevrim yok, robno kendi yapiyor. */
+/* ══ HR BELGE OKUYUCU ═══════════════════════════════════════════════
+   Hirvat carinska deklaracija (Brix/AIS) ve spedicija racunu METIN
+   katmanli PDF - pdf.js dogrudan okur, OCR gerekmez.
+   (Bosna'nin ayni belgeleri SAF TARAMA: font referansi 0, metin
+   operatoru 0.  Orada okuma yok, rakamlar elle girilir.)
+   Bu ayristirici Node'da iki gercek belgeye karsi 19/19 dogrulandi.
+   Tahmin YOK: bulamadigi alani bos birakir, uydurmaz.              */
+
+if (typeof pdfjsLib !== 'undefined')
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
+
+/* Satirlari y toleransiyla grupla - tablo hucreleri bir arada kalsin */
+function pdfSatirlar(tc, tol){
+  var g = [];
+  tc.items.forEach(function(it){
+    var y = it.transform[5], x = it.transform[4];
+    for (var i = 0; i < g.length; i++)
+      if (Math.abs(g[i].y - y) <= tol){ g[i].p.push([x, it.str]); return; }
+    g.push({y: y, p: [[x, it.str]]});
+  });
+  return g.sort(function(a,b){ return b.y - a.y; }).map(function(r){
+    return r.p.sort(function(a,b){ return a[0]-b[0]; })
+              .map(function(q){ return q[1]; }).join(' ')
+              .replace(/\s+/g,' ').trim();
+  }).filter(Boolean);
+}
+
+function hrSayi(v){
+  if (v == null) return null;
+  var x = parseFloat(String(v).trim().replace(/\./g,'').replace(',','.'));
+  return isFinite(x) ? x : null;
+}
+var PDF_N = '([\\d.]{1,15},\\d{1,6})';
+function pdfBul(t, re, i){ var m = t.match(re); return m ? hrSayi(m[i||1]) : null; }
+
+function okuDeklaracija(t){
+  var o = {tip:'deklaracija'};
+  /* MRN etiketi ile degeri AYRI satirlarda - kaliba bak.
+     TUZAK: "Prethodni dokumenti: N821/ 26TR..." ayni kalipta ama o
+     TURK ihracat deklarasyonu.  N###/ onekli olanlari at, HR'yi sec. */
+  var all = [], re = /\b(\d{2}[A-Z]{2}[0-9A-Z]{14})\b/g, m;
+  while ((m = re.exec(t)) !== null)
+    if (!/N\d{3}\/\s*$/.test(t.slice(Math.max(0,m.index-8), m.index))) all.push(m[1]);
+  o.mrn = null;
+  for (var i=0;i<all.length;i++) if (all[i].substr(2,2)==='HR'){ o.mrn=all[i]; break; }
+  if (!o.mrn && all.length) o.mrn = all[0];
+  o.ref   = (t.match(/\b(U\/\d{2}-\d{4,6})\b/) || [])[1] || null;
+  o.usd   = pdfBul(t, new RegExp(PDF_N+'\\s*USD\\s*Ukupna vrijednost')) ||
+            pdfBul(t, new RegExp('Ukupna vrijednost:?\\s*'+PDF_N));
+  o.tecaj = pdfBul(t, new RegExp(PDF_N+'\\s*USD\\s*Te[cč]aj')) ||
+            pdfBul(t, new RegExp('Te[cč]aj:?\\s*'+PDF_N));
+  o.ak    = pdfBul(t, new RegExp('\\bAK\\s*'+PDF_N));
+  o.ca    = pdfBul(t, new RegExp('\\bCA\\s*'+PDF_N));
+  o.stat  = pdfBul(t, new RegExp(PDF_N+'\\s*EUR\\s*Statisti[cč]ka')) ||
+            pdfBul(t, new RegExp('Statisti[cč]ka vrijednost:?\\s*'+PDF_N));
+  var A = t.match(new RegExp('A00\\s*\\/\\s*\\/\\s*'+PDF_N+'\\s*EUR\\s*\\/\\s*([\\d,]+)%\\s*'+PDF_N));
+  var B = t.match(new RegExp('B00\\*?\\s*\\/\\s*\\/\\s*'+PDF_N+'\\s*EUR\\s*\\/\\s*([\\d,]+)%\\s*'+PDF_N));
+  if (A){ o.carinaOsn=hrSayi(A[1]); o.carinaStopa=hrSayi(A[2]); o.carina=hrSayi(A[3]); }
+  if (B){ o.pdvOsn=hrSayi(B[1]);    o.pdvStopa=hrSayi(B[2]);    o.pdv=hrSayi(B[3]); }
+  /* ic tutarlilik: mal/tecaj + AK + CA  ==  PDV osnovicasi */
+  if (o.usd!=null && o.tecaj && o.pdvOsn!=null){
+    o.hesOsn = Math.round((o.usd/o.tecaj + (o.ak||0) + (o.ca||0))*100)/100;
+    o.tutarli = Math.abs(o.hesOsn - o.pdvOsn) < 0.02;
+  }
+  return o;
+}
+
+function okuSpedicija(t){
+  var o = {tip:'spedicija'};
+  o.broj = (t.match(/Ra[cč]un br\.?\s*([0-9A-Za-z\/\-]+)/) || [])[1] || null;
+  o.dosp = (t.match(/Dospije[cć]e pla[cć]anja\s*:?\s*([\d.]+\d)/) || [])[1] || null;
+  var m = t.match(new RegExp('Ukupno oporezivo\\s*([\\d,]+)%\\s*'+PDF_N+'\\s*'+PDF_N+'\\s*'+PDF_N));
+  if (m){ o.stopa=hrSayi(m[1]); o.bez=hrSayi(m[2]); o.pdv=hrSayi(m[3]); }
+  o.prolazne = pdfBul(t, new RegExp('UKUPNO PROLAZNE STAVKE\\s*'+PDF_N)) ||
+               pdfBul(t, new RegExp(PDF_N+'\\s*(?:II\\.\\s*)?UKUPNO PROLAZNE STAVKE'));
+  /* "SVEUKUPNO I. + II. EUR 98,49 15,00 113,49" - UC sayi, SONUNCUSU toplam */
+  var u = t.match(new RegExp('SVEUKUPNO[^\\n]*?EUR\\s*(?:'+PDF_N+'\\s*){0,2}'+PDF_N));
+  o.ukupno = u ? hrSayi(u[u.length-1]) : null;
+  if (o.bez!=null && o.pdv!=null && o.prolazne!=null){
+    o.hesTop = Math.round((o.bez+o.pdv+o.prolazne)*100)/100;
+    o.tutarli = o.ukupno!=null && Math.abs(o.ukupno-o.hesTop) < 0.005;
+  }
+  return o;
+}
+
+/* ── KUR YONU IKI ULKEDE TERS - TEK YERDEN CEVIR ───────────────────
+   BiH  carinska deklaracija "polje 23"  ->  USD basina KM  (1,676809)
+        USD * kurs = KM
+   HR   carinska deklaracija "Tecaj"     ->  1 EUR = X USD  (1,140800)
+        USD / kurs = EUR
+   Belgeler kuru ZIT yonde basiyor.  26.08.2026'da HR icin 1,1408 carpilsa
+   80.081,35 EUR cikardi, dogrusu 61.533,61 EUR - %30,14 sapma.  Bu yuzden
+   hicbir yerde elle '* kurs' yazma, hep bu ikisinden gec. */
+function kurCevir(usd, k){
+  if (k == null || usd == null) return null;
+  return hr() ? usd / k : usd * k;
+}
+/* 1/10000 tam sayi biriminde, kurusa yuvarlayarak */
+function kurCevirTam(t, k){
+  if (k == null || t == null) return null;
+  return Math.round((hr() ? t / k : t * k) / 100) * 100;
+}
+/* Her iki belgede de dogru kur 1'den BUYUKtur (HR ~1,14 / BiH ~1,68).
+   1'in altindaki deger neredeyse kesin ters yonde girilmistir. */
+function kurTers(k){ return k != null && k < 1; }
+
 function satirTutar(s){
   if (!hr()) return s.tutar;
   var k = sayi(el('iKurs').value);
-  if (k == null) return null;
-  /* para 2 ondalik: 1/10000 biriminde kurusa yuvarla (109,44 x 0,9047 -> 99,01) */
-  return Math.round(s.tutar * k / 100) * 100;
+  return kurCevirTam(s.tutar, k);
 }
 
 function kalkOku(){
@@ -985,8 +1217,13 @@ function kalkCiz(){
 
   el('bUvozAlt').textContent = hr() ? '3 kolon · EUR' : '5 kolon';
   el('kursHint').textContent = hr()
-    ? 'carinska deklaracija · USD → EUR (~0,90)'
-    : 'carinska deklaracija, polje 23 · USD → KM';
+    ? 'carinska deklaracija · Tečaj (1 EUR = ? USD, npr. 1,140800)'
+    : 'carinska deklaracija, polje 23 · USD → KM (npr. 1,676809)';
+  el('iKurs').placeholder = hr() ? '1,140800' : '1,676809';
+  var dp = el('dropPdf');
+  if (dp){
+    dp.style.display = hr() ? 'block' : 'none';   /* BiH belgeleri saf tarama */
+  }
   el('traHint').textContent = hr()
     ? 'prevoznik · već u EUR, ne pretvara se'
     : 'prevoznik · x 1,95583 u KM';
@@ -1007,7 +1244,20 @@ function kalkCiz(){
   var kurs = o.Kurs, traKM = o.Tra == null ? null : (hr() ? o.Tra : o.Tra * EUR_KM);
   var PB = paraAdi();
 
-  var iznos = (kurs == null || mal == null) ? null : mal * kurs;
+  var iznos = kurCevir(mal, kurs);
+
+  /* Ters yon ANINDA gorunsun: girilen kurla ne cikiyor, alanin altinda yaz.
+     Sessiz %30 hatanin tek panzehiri bu - rakami gozunle dogrularsin. */
+  var ke = el('kursEcho');
+  if (kurs == null){ ke.innerHTML = ''; }
+  else if (kurTers(kurs)){
+    ke.innerHTML = '<b class="kbad">Tečaj manji od 1 &mdash; možda obrnuti smjer.</b> ' +
+      (hr() ? 'Deklaracija daje <b>1 EUR = ? USD</b> (npr. 1,140800).'
+            : 'Polje 23 daje <b>KM po USD</b> (npr. 1,676809).');
+  } else if (tum != null){
+    ke.innerHTML = bicim(tum) + ' USD ' + (hr() ? '&divide;' : '&times;') + ' ' +
+      bicim(kurs, 6) + ' = <b>' + bicim(kurCevir(tum, kurs)) + ' ' + PB + '</b>';
+  } else ke.innerHTML = '';
   el('rIznos').textContent = iznos == null ? '\u2014' : bicim(iznos) + ' ' + PB;
   el('rPdv').textContent   = o.Pdv == null ? '\u2014' : bicim(o.Pdv) + ' ' + PB;
   el('rTot').textContent   = (iznos == null || o.Pdv == null) ? '\u2014' : bicim(iznos + o.Pdv) + ' ' + PB;
@@ -1026,7 +1276,7 @@ function kalkCiz(){
   if (o.Pdv != null && kurs != null && exw != null &&
       o.Carina != null && traKM != null && o.Ost != null){
     var bel = o.Pdv / stopa;
-    var hes = exw * kurs + traKM + o.Ost + o.Carina;
+    var hes = kurCevir(exw, kurs) + traKM + o.Ost + o.Carina;
     var fark = bel - hes;
     /* gozlenen yuvarlama gurultusu 0,01-0,02 KM (satir basina pro-rata
        iskonto yuvarlamasi) - 0,50 hem onu tolere eder hem gercek hatayi yakalar */
@@ -1034,7 +1284,8 @@ function kalkCiz(){
     m = '<div class="msg ' + (ok ? 'ok' : 'err') + '">' +
         '<b>PDV osnovica kontrola</b><br>' +
         'iz deklaracije (PDV &divide; ' + bicim(stopa, 2) + '): <b>' + bicim(bel) + ' ' + PB + '</b><br>' +
-        'izracunato (EXW&times;kurs + transport + ostalo + carina): <b>' + bicim(hes) + ' ' + PB + '</b><br>' +
+        'izracunato (EXW' + (hr() ? '&divide;' : '&times;') +
+        'kurs + transport + ostalo + carina): <b>' + bicim(hes) + ' ' + PB + '</b><br>' +
         'razlika: <b>' + bicim(fark) + ' ' + PB + '</b> &mdash; ' +
         (ok ? 'slaze se' : 'NE SLAZE SE, provjeri kurs / carinu / PDV / EXW') + '</div>';
   } else {
@@ -1058,7 +1309,7 @@ el('bKalkKopya').onclick = function(){
     S.res.satirlar.forEach(function(s){ if (s.sinif === K.URUN) mal += s.tutar; });
     mal /= 10000;
   }
-  var kurs = o.Kurs, iznos = (kurs == null || mal == null) ? null : mal * kurs;
+  var kurs = o.Kurs, iznos = kurCevir(mal, kurs);
   var L = [];
   L.push('KALKULACIJA  ' + (S ? (S.res.fatura || '') + '  ' + (S.res.tarih || '') : ''));
   L.push('');
@@ -1099,7 +1350,7 @@ function kalkSatir(){
   mal /= 10000; nemal /= 10000; tum /= 10000; isk /= 10000;
   var exw   = iskVar ? (tum - isk) : o.ExwMan;
   var traKM = o.Tra == null ? null : (hr() ? o.Tra : o.Tra * EUR_KM);
-  var iznos = (o.Kurs == null) ? null : mal * o.Kurs;
+  var iznos = kurCevir(mal, o.Kurs);
   var stopa = hr() ? (o.PdvSt == null ? 25 : o.PdvSt) / 100 : PDV_STOPA;
   var zt = null;
   [o.Carina, traKM, o.Spb, o.Spp, o.Ost].forEach(function(v){
@@ -1107,7 +1358,7 @@ function kalkSatir(){
   var razlika = null;
   if (o.Pdv != null && o.Kurs != null && exw != null &&
       o.Carina != null && traKM != null && o.Ost != null)
-    razlika = o.Pdv / stopa - (exw * o.Kurs + traKM + o.Ost + o.Carina);
+    razlika = o.Pdv / stopa - (kurCevir(exw, o.Kurs) + traKM + o.Ost + o.Carina);
 
   function n(v, d){ return v == null ? '' : bicim(v, d); }
   return [DRZAVA, S.res.fatura || '', S.res.tarih || '', S.dosya,
@@ -1295,9 +1546,8 @@ function klasa0(){
   sat.forEach(function(x, i){ if (x.tutar > sat[enB].tutar) enB = i; });
   neto[enB] += netoT - neto.reduce(function(a, b){ return a + b; }, 0);
 
-  var kmT = kurs == null ? null : Math.round(netoT * kurs / 100) * 100;
-  var km = neto.map(function(v){
-    return kurs == null ? null : Math.round(v * kurs / 100) * 100; });
+  var kmT = kurCevirTam(netoT, kurs);
+  var km = neto.map(function(v){ return kurCevirTam(v, kurs); });
   if (kurs != null){
     var s2 = km.reduce(function(a, b){ return a + b; }, 0);
     km[enB] += kmT - s2;
